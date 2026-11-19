@@ -5071,7 +5071,8 @@ Plater* MainFrame::new_project_tab()
     PresetBundle::DocumentState presets = wxGetApp().preset_bundle->document_state();
     m_project_tabs[m_active_project_tab].presets = presets;
 
-    Plater* plater = nullptr;
+    Plater* plater     = nullptr;
+    bool    is_new_one = false;
     if (!m_spare_platers.empty()) {
         plater = m_spare_platers.back();
         m_spare_platers.pop_back();
@@ -5080,6 +5081,7 @@ Plater* MainFrame::new_project_tab()
         plater->SetBackgroundColour(*wxWHITE);
         plater->wxPanel::Show(false);
         m_plater_book->GetSizer()->Add(plater, 1, wxEXPAND);
+        is_new_one = true;
     }
     m_project_tabs.push_back({ plater, std::nullopt });
     m_active_project_tab = m_project_tabs.size() - 1;
@@ -5090,6 +5092,8 @@ Plater* MainFrame::new_project_tab()
     wxGetApp().preset_bundle->restore_document_state(presets, true);
     m_plater           = plater;
     wxGetApp().plater_ = plater;
+    if (is_new_one)
+        plater->init_project_tab();
     wxGetApp().load_current_presets(false, false);
     // Silent: no prompt, the new tab has nothing to lose.
     plater->new_project(true, true, wxString(), false);

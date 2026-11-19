@@ -19532,6 +19532,14 @@ void Plater::on_project_tab_deactivated()
     p->view3D->get_canvas3d()->get_gizmos_manager().reset_all_states();
 }
 
+void Plater::init_project_tab()
+{
+    get_camera().select_view("topfront");
+    get_camera().requires_zoom_to_bed = true;
+    sidebar().obj_list()->init();
+    init_notification_manager();
+}
+
 void Plater::on_project_tab_activated(bool preview)
 {
     p->sidebar_layout.is_enabled = !m_only_gcode;

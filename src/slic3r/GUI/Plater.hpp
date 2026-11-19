@@ -404,6 +404,9 @@ public:
     void on_project_tab_deactivated();
     // After the tab's presets are back in the preset bundle. preview: the Preview tab is the one shown.
     void on_project_tab_activated(bool preview);
+    // Once, for a plater made for a new tab while it is wxGetApp().plater(): what GUI_App does for
+    // the first plater at startup (object list bound to this model, notifications, camera).
+    void init_project_tab();
     // Returns false when no object was added (e.g. the user cancelled the load dialog).
     bool add_model(bool imperial_units = false, std::string fname = "");
     void import_zip_archive();
