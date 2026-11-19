@@ -8330,10 +8330,10 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     // This event wakes up the Mouse3DController's background thread to enumerate HID devices, if the VID of the callback event
     // is one of the 3D Mouse vendors (3DConnexion or Logitech).
     this->q->Bind(EVT_HID_DEVICE_ATTACHED, [this](HIDDeviceAttachedEvent &evt) {
-        q->get_mouse3d_controller().device_attached(evt.data);
+        this->q->get_mouse3d_controller().device_attached(evt.data);
         });
     this->q->Bind(EVT_HID_DEVICE_DETACHED, [this](HIDDeviceAttachedEvent& evt) {
-        q->get_mouse3d_controller().device_detached(evt.data);
+        this->q->get_mouse3d_controller().device_detached(evt.data);
         });
 #endif /* _WIN32 */
     //notification_manager = new NotificationManager(this->q);
