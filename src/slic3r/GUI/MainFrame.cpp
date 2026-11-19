@@ -468,7 +468,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
     m_topbar         = new BBLTopbar(this);
 #else
     auto panel_topbar = new wxPanel(this, wxID_ANY);
-    panel_topbar->SetBackgroundColour(wxColour(38, 46, 48));
+    panel_topbar->SetBackgroundColour(wxColour(20, 40, 71)); // KadWise top bar navy
     auto sizer_tobar = new wxBoxSizer(wxVERTICAL);
     panel_topbar->SetSizer(sizer_tobar);
     panel_topbar->Layout();
@@ -1610,7 +1610,8 @@ void MainFrame::init_tabpanel() {
         m_param_panel = new ParamsPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBK_LEFT | wxTAB_TRAVERSAL);
     }
 
-    // Print farm: the Prepare/Preview page holds the project tab strip and one Plater per project.
+    // Print farm: the Prepare/Preview page holds one Plater per project and, under them as in
+    // FreeCAD, the strip of project tabs. Platers always go in before the strip (the last item).
     m_plater_book = new PlaterBook(this);
     auto* plater_book_sizer = new wxBoxSizer(wxVERTICAL);
     m_project_tab_bar = new ProjectTabBar(m_plater_book, {
@@ -1622,7 +1623,7 @@ void MainFrame::init_tabpanel() {
 
     m_plater = new Plater(m_plater_book, this);
     m_plater->SetBackgroundColour(*wxWHITE);
-    plater_book_sizer->Add(m_plater, 1, wxEXPAND);
+    plater_book_sizer->Insert(0, m_plater, 1, wxEXPAND);
     m_plater->Hide();
     m_project_tabs.push_back({ m_plater, std::nullopt });
     m_first_plater = m_plater;
@@ -2366,8 +2367,8 @@ wxBoxSizer* MainFrame::create_side_tools()
 
     auto slice_panel = new wxPanel(this,wxID_ANY,wxDefaultPosition,wxDefaultSize);
     auto print_panel = new wxPanel(this,wxID_ANY,wxDefaultPosition,wxDefaultSize);
-    slice_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3B4446")));
-    print_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3B4446")));
+    slice_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#1A3360")));
+    print_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#1A3360")));
 
     m_slice_btn = new SideButton(slice_panel, _L("Slice plate"), "");
     m_slice_option_btn = new SideButton(slice_panel, "", "sidebutton_dropdown", 0, 14);
@@ -2559,7 +2560,7 @@ wxBoxSizer* MainFrame::create_side_tools()
 
     /*
     Button * aux_btn = new Button(this, _L("Auxiliary"));
-    aux_btn->SetBackgroundColour(0x3B4446);
+    aux_btn->SetBackgroundColour(0x1A3360);
     aux_btn->Bind(wxEVT_BUTTON, [](auto e) {
         wxGetApp().sidebar().show_auxiliary_dialog();
     });
@@ -2723,9 +2724,9 @@ void MainFrame::update_side_button_style()
     m_slice_btn->SetExtraSize(wxSize(FromDIP(38), FromDIP(10)));
     m_slice_btn->SetBottomColour(wxColour(0x3B4446));*/
     StateColor m_btn_bg_enable = StateColor(
-        std::pair<wxColour, int>(wxColour(0, 137, 123), StateColor::Pressed),
+        std::pair<wxColour, int>(wxColour(24, 46, 84), StateColor::Pressed),
         std::pair<wxColour, int>(wxColour(48, 221, 112), StateColor::Hovered),
-        std::pair<wxColour, int>(wxColour(0, 150, 136), StateColor::Normal)
+        std::pair<wxColour, int>(wxColour(31, 58, 104), StateColor::Normal)
     );
 
     // m_publish_btn->SetMinSize(wxSize(FromDIP(125), FromDIP(24)));
@@ -2758,7 +2759,7 @@ void MainFrame::update_side_button_style()
     m_print_option_btn->SetMinSize(wxSize(FromDIP(24), FromDIP(24)));
 
     // Keep panel backgrounds in sync with SideButton's darkModeColorFor(#3B4446) bottom strip
-    auto bg = StateColor::darkModeColorFor(wxColour("#3B4446"));
+    auto bg = StateColor::darkModeColorFor(wxColour("#1A3360"));
     m_slice_btn->GetParent()->SetBackgroundColour(bg);
     m_print_btn->GetParent()->SetBackgroundColour(bg);
 }
@@ -5080,7 +5081,8 @@ Plater* MainFrame::new_project_tab()
         plater = new Plater(m_plater_book, this);
         plater->SetBackgroundColour(*wxWHITE);
         plater->wxPanel::Show(false);
-        m_plater_book->GetSizer()->Add(plater, 1, wxEXPAND);
+        wxSizer* book_sizer = m_plater_book->GetSizer();
+        book_sizer->Insert(book_sizer->GetItemCount() - 1, plater, 1, wxEXPAND);
         is_new_one = true;
     }
     m_project_tabs.push_back({ plater, std::nullopt });

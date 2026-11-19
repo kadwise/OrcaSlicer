@@ -37,24 +37,25 @@ SideButton::SideButton(wxWindow* parent, wxString text, wxString icon, long stly
     icon_offset = 0;
     text_orientation = HO_Left;
 
+    // KadWise: Slice and Print are the yellow actions on the navy bar.
     border_color.append(0x6B6B6B, StateColor::Disabled);
-    border_color.append(wxColour(0, 137, 123), StateColor::Pressed);
-    border_color.append(wxColour(38, 166, 154), StateColor::Hovered);
-    border_color.append(0x009688, StateColor::Normal);
+    border_color.append(0xD9A404, StateColor::Pressed);
+    border_color.append(0xF5C83A, StateColor::Hovered);
+    border_color.append(0xF2B705, StateColor::Normal);
     border_color.setTakeFocusedAsHovered(false);
 
     text_color.append(0xACACAC, StateColor::Disabled);
-    text_color.append(0xFEFEFE, StateColor::Pressed);
-    text_color.append(0xFEFEFE, StateColor::Hovered);
-    text_color.append(0xFEFEFE, StateColor::Normal);
+    text_color.append(0x1C2536, StateColor::Pressed);
+    text_color.append(0x1C2536, StateColor::Hovered);
+    text_color.append(0x1C2536, StateColor::Normal);
 
     background_color.append(0x6B6B6B, StateColor::Disabled);
-    background_color.append(wxColour(0, 137, 123), StateColor::Pressed);
-    background_color.append(wxColour(38, 166, 154), StateColor::Hovered);
-    background_color.append(0x009688, StateColor::Normal);
+    background_color.append(0xD9A404, StateColor::Pressed);
+    background_color.append(0xF5C83A, StateColor::Hovered);
+    background_color.append(0xF2B705, StateColor::Normal);
     background_color.setTakeFocusedAsHovered(false);
 
-    SetBottomColour(wxColour("#3B4446"));
+    SetBottomColour(wxColour("#1A3360"));
 
     state_handler.attach({ &border_color, &text_color, &background_color });
     state_handler.update_binds();

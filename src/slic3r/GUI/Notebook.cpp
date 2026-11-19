@@ -33,7 +33,7 @@ ButtonsListCtrl::ButtonsListCtrl(wxWindow *parent, wxBoxSizer* side_tools) :
 
     wxColour default_btn_bg;
 #ifdef __APPLE__
-    default_btn_bg = wxColour("#3B4446"); // Gradient #414B4E
+    default_btn_bg = wxColour("#1A3360"); // Gradient #414B4E
 #else
     default_btn_bg = wxColour("#2D2D30"); // Gradient #414B4E
 #endif
@@ -80,7 +80,7 @@ void ButtonsListCtrl::OnPaint(wxPaintEvent&)
         return;
 
     wxColour selected_btn_bg("#1F8EEA");
-    wxColour default_btn_bg("#3B4446"); // Gradient #414B4E
+    wxColour default_btn_bg("#1A3360"); // Gradient #414B4E
     const wxColour& btn_marker_color = Slic3r::GUI::wxGetApp().get_color_hovered_btn_label();
 
     // highlight selected notebook button
@@ -133,11 +133,11 @@ void ButtonsListCtrl::SetSelection(int sel)
     if (m_selection == sel && sel >= 0 && sel < static_cast<int>(m_pageButtons.size()))
         return;
     // BBS: change button color
-    wxColour selected_btn_bg("#009688");    // Gradient #009688
+    wxColour selected_btn_bg("#1F3A68");    // Gradient #1F3A68
     if (m_selection >= 0 && m_selection < static_cast<int>(m_pageButtons.size())) {
         StateColor bg_color = StateColor(
         std::pair{wxColour(107, 107, 107), (int) StateColor::Hovered},
-        std::pair{wxColour(59, 68, 70), (int) StateColor::Normal});
+        std::pair{wxColour(26, 51, 96), (int) StateColor::Normal});
         m_pageButtons[m_selection]->SetBackgroundColor(bg_color);
         StateColor text_color = StateColor(
         std::pair{wxColour(254,254, 254), (int) StateColor::Normal}
@@ -153,13 +153,14 @@ void ButtonsListCtrl::SetSelection(int sel)
 
     m_selection = sel;
 
+    // KadWise: the selected main tab is yellow with dark text.
     StateColor bg_color = StateColor(
-        std::pair{wxColour(0, 150, 136), (int) StateColor::Hovered},
-        std::pair{wxColour(0,150, 136), (int) StateColor::Normal});
+        std::pair{wxColour(245, 200, 58), (int) StateColor::Hovered},
+        std::pair{wxColour(242, 183, 5), (int) StateColor::Normal});
     m_pageButtons[m_selection]->SetBackgroundColor(bg_color);
 
     StateColor text_color = StateColor(
-        std::pair{wxColour(254, 254, 254), (int) StateColor::Normal}
+        std::pair{wxColour(28, 37, 54), (int) StateColor::Normal}
         );
     m_pageButtons[m_selection]->SetTextColor(text_color);
     
@@ -190,7 +191,7 @@ bool ButtonsListCtrl::InsertPage(size_t n, const wxString &text, bool bSelect /*
 
     StateColor bg_color = StateColor(
         std::pair{wxColour(107, 107, 107), (int) StateColor::Hovered},
-        std::pair{wxColour(59, 68, 70), (int) StateColor::Normal});
+        std::pair{wxColour(26, 51, 96), (int) StateColor::Normal});
 
     btn->SetBackgroundColor(bg_color);
     StateColor text_color = StateColor(

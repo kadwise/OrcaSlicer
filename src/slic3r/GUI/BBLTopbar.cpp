@@ -63,7 +63,7 @@ CenteredTitle::CenteredTitle(wxWindow* parent)
     Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
     Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
         wxBufferedPaintDC dc(this);
-        dc.SetBackground(wxBrush(wxColour(38, 46, 48)));
+        dc.SetBackground(wxBrush(wxColour(20, 40, 71)));
         dc.Clear();
 
         dc.SetTextForeground(*wxWHITE);
@@ -119,7 +119,7 @@ public:
 
 void BBLTopbarArt::DrawBackground(wxDC& dc, wxWindow* wnd, const wxRect& rect)
 {
-    dc.SetBrush(wxBrush(wxColour(38, 46, 48)));
+    dc.SetBrush(wxBrush(wxColour(20, 40, 71)));
     wxRect clipRect = rect;
     clipRect.y -= 8;
     clipRect.height += 8;
@@ -181,19 +181,19 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
     {
         if (item.GetState() & wxAUI_BUTTON_STATE_PRESSED)
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
             dc.DrawRectangle(rect);
         }
         else if ((item.GetState() & wxAUI_BUTTON_STATE_HOVER) || item.IsSticky())
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
 
             // draw an even lighter background for checked item hovers (since
             // the hover background is the same color as the check background)
             if (item.GetState() & wxAUI_BUTTON_STATE_CHECKED)
-                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
 
             dc.DrawRectangle(rect);
         }
@@ -201,8 +201,8 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
         {
             // it's important to put this code in an else statement after the
             // hover, otherwise hovers won't draw properly for checked items
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#2C4F8A"))); // ORCA
             dc.DrawRectangle(rect);
         }
     }

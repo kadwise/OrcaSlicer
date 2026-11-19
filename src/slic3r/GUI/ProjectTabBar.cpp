@@ -29,7 +29,7 @@ bool PlaterBook::Show(bool show)
 ProjectTabBar::ProjectTabBar(wxWindow* parent, Callbacks callbacks)
     : wxPanel(parent, wxID_ANY), m_callbacks(std::move(callbacks))
 {
-    SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#E6E6E8")));
+    SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#E9E4D8")));
     m_sizer = new wxBoxSizer(wxHORIZONTAL);
     SetSizer(m_sizer);
     rebuild();
@@ -57,18 +57,21 @@ void ProjectTabBar::rebuild()
     Freeze();
     m_sizer->Clear(true);
 
-    const wxColour bar_bg      = StateColor::darkModeColorFor(wxColour("#E6E6E8"));
-    const wxColour tab_bg      = StateColor::darkModeColorFor(wxColour("#D5D5D8"));
-    const wxColour selected_bg = StateColor::darkModeColorFor(wxColour("#FFFFFF"));
-    const wxColour text        = StateColor::darkModeColorFor(wxColour("#262E30"));
-    const wxColour accent      = wxColour("#009688");
+    // KadWise, FreeCAD style: a cream strip under the 3D view; the selected tab is lighter,
+    // with a yellow line on top and navy text.
+    const wxColour bar_bg      = StateColor::darkModeColorFor(wxColour("#E9E4D8"));
+    const wxColour selected_bg = StateColor::darkModeColorFor(wxColour("#F7F1E3"));
+    const wxColour text        = StateColor::darkModeColorFor(wxColour("#4A5263"));
+    const wxColour selected_fg = StateColor::darkModeColorFor(wxColour("#1F3A68"));
+    const wxColour accent      = wxColour("#F2B705");
     SetBackgroundColour(bar_bg);
 
     const int pad = FromDIP(6);
+    m_sizer->AddSpacer(FromDIP(8));
     for (size_t i = 0; i < m_labels.size(); ++i) {
         const bool selected = i == m_selected;
         auto*      tab      = new wxPanel(this, wxID_ANY);
-        tab->SetBackgroundColour(selected ? selected_bg : tab_bg);
+        tab->SetBackgroundColour(selected ? selected_bg : bar_bg);
         tab->SetCursor(wxCursor(wxCURSOR_HAND));
         auto* tab_sizer = new wxBoxSizer(wxVERTICAL);
         auto* row       = new wxBoxSizer(wxHORIZONTAL);
@@ -78,21 +81,21 @@ void ProjectTabBar::rebuild()
         if (selected)
             font.SetWeight(wxFONTWEIGHT_BOLD);
         label->SetFont(font);
-        label->SetForegroundColour(text);
+        label->SetForegroundColour(selected ? selected_fg : text);
         label->SetToolTip(m_labels[i]);
 
         auto* close = new wxStaticText(tab, wxID_ANY, wxString::FromUTF8("\xC3\x97"));
-        close->SetFont(font);
+        close->SetFont(wxGetApp().normal_font());
         close->SetForegroundColour(text);
         close->SetToolTip(_L("Close this project"));
 
-        row->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(10));
+        row->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
         row->Add(close, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(8));
-        // A line under the selected tab, so it reads as the one in front.
-        auto* underline = new wxPanel(tab, wxID_ANY, wxDefaultPosition, wxSize(-1, FromDIP(2)));
-        underline->SetBackgroundColour(selected ? accent : tab->GetBackgroundColour());
+        // The line on top of the selected tab, so it reads as the one in front.
+        auto* marker = new wxPanel(tab, wxID_ANY, wxDefaultPosition, wxSize(-1, FromDIP(3)));
+        marker->SetBackgroundColour(selected ? accent : tab->GetBackgroundColour());
+        tab_sizer->Add(marker, 0, wxEXPAND);
         tab_sizer->Add(row, 1, wxEXPAND | wxTOP | wxBOTTOM, pad);
-        tab_sizer->Add(underline, 0, wxEXPAND);
         tab->SetSizer(tab_sizer);
 
         auto on_select = [this, i](wxMouseEvent&) { post([this, i]() { if (m_callbacks.select) m_callbacks.select(i); }); };
@@ -104,17 +107,16 @@ void ProjectTabBar::rebuild()
         label->Bind(wxEVT_MIDDLE_UP, on_close);
         close->Bind(wxEVT_LEFT_UP, on_close);
 
-        m_sizer->Add(tab, 0, wxEXPAND | wxRIGHT, FromDIP(1));
+        m_sizer->Add(tab, 0, wxEXPAND | wxRIGHT, FromDIP(2));
     }
 
     auto* add = new wxStaticText(this, wxID_ANY, "+");
-    wxFont add_font = wxGetApp().bold_font();
-    add->SetFont(add_font);
-    add->SetForegroundColour(text);
+    add->SetFont(wxGetApp().bold_font());
+    add->SetForegroundColour(selected_fg);
     add->SetCursor(wxCursor(wxCURSOR_HAND));
     add->SetToolTip(_L("New project tab"));
     add->Bind(wxEVT_LEFT_UP, [this](wxMouseEvent&) { post([this]() { if (m_callbacks.add) m_callbacks.add(); }); });
-    m_sizer->Add(add, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(10));
+    m_sizer->Add(add, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(12));
 
     Layout();
     if (GetParent() != nullptr)
