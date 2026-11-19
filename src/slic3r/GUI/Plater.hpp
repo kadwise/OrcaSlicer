@@ -398,6 +398,12 @@ public:
     void add_file();
     // Print farm: appends the plates of other project files to the current project.
     void add_projects_as_plates();
+
+    // Print farm project tabs. Leaving a tab pauses its slicing: the preset bundle is about to hold
+    // another tab's presets. Plates already sliced keep their results.
+    void on_project_tab_deactivated();
+    // After the tab's presets are back in the preset bundle. preview: the Preview tab is the one shown.
+    void on_project_tab_activated(bool preview);
     // Returns false when no object was added (e.g. the user cancelled the load dialog).
     bool add_model(bool imperial_units = false, std::string fname = "");
     void import_zip_archive();

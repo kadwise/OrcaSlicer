@@ -1,4 +1,5 @@
 #include "MainFrame.hpp"
+#include "ProjectTabBar.hpp"
 #include "slic3r/plugin/host/PluginPages.hpp"
 
 #include <wx/event.h>
@@ -710,6 +711,19 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
             return wxGetApp().check_and_save_current_preset_changes(_L("Closing application"), _L("Closing Application while some presets are modified."));
         };
 
+        // Print farm: offer to save every other open project tab first, each shown while asked.
+        if (event.CanVeto()) {
+            for (size_t i = 0; i < m_project_tabs.size(); ++i) {
+                if (m_project_tabs[i].plater == m_plater || !m_project_tabs[i].plater->is_project_dirty())
+                    continue;
+                select_project_tab(i);
+                if (m_plater->close_with_confirm(check) == wxID_CANCEL) {
+                    event.Veto();
+                    return;
+                }
+            }
+        }
+
         // BBS: close save project
         int result;
         if (event.CanVeto() && ((result = m_plater->close_with_confirm(check)) == wxID_CANCEL)) {
@@ -883,7 +897,7 @@ bool MainFrame::handle_global_shortcut(const KeyChord& chord)
             }
             // Focus the tab bar on any page but the canvases, since CHAR_HOOK gets no keys while a web page has focus
             wxWindow* const page = m_tabpanel->GetCurrentPage();
-            bool keeps_focus = page == m_plater;
+            bool keeps_focus = page == m_plater_book;
 #ifdef SLIC3R_CAD
             keeps_focus = keeps_focus || page == m_design_page;
 #endif
@@ -921,7 +935,7 @@ bool MainFrame::handle_global_shortcut(const KeyChord& chord)
         // Deferred out of the native key-event stack: open_speed_dial() may create a WebView and run script.
         CallAfter([] { wxGetApp().open_speed_dial(); });
         break;
-    case Shortcut::NewProject: m_plater->new_project(); break;
+    case Shortcut::NewProject: new_project_or_tab(); break;
     case Shortcut::OpenProject: m_plater->load_project(); break;
     case Shortcut::SaveProjectAs:
         if (can_save_as())
@@ -1179,13 +1193,13 @@ void MainFrame::update_layout()
             }
         };
 
-        // On Linux m_plater needs to be removed from m_tabpanel before to reparent it
-        int plater_page_id = m_tabpanel->FindPage(m_plater);
+        // On Linux the plater page needs to be removed from m_tabpanel before to reparent it
+        int plater_page_id = m_tabpanel->FindPage(m_plater_book);
         if (plater_page_id != wxNOT_FOUND)
             m_tabpanel->RemovePage(plater_page_id);
 
-        if (m_plater->GetParent() != this)
-            m_plater->Reparent(this);
+        if (m_plater_book->GetParent() != this)
+            m_plater_book->Reparent(this);
 
         if (m_tabpanel->GetParent() != this)
             m_tabpanel->Reparent(this);
@@ -1204,6 +1218,7 @@ void MainFrame::update_layout()
 
         m_tabpanel->Hide();
         m_plater->Hide();
+        m_plater_book->Hide();
 
         Layout();
     };
@@ -1239,7 +1254,7 @@ void MainFrame::update_layout()
     {
     case ESettingsLayout::Old:
     {
-        m_plater->Reparent(m_tabpanel);
+        m_plater_book->Reparent(m_tabpanel);
         // Right after Home — or first, when there is no Home tab (PositionAfter() would
         // append instead, and by now the other built-in tabs are already in place).
         const int home_idx = m_tabpanel->FindPageByName(TAB_ID_HOME);
@@ -1252,8 +1267,8 @@ void MainFrame::update_layout()
             m_tabpanel->InsertPage(prepare_pos++, TAB_ID_DESIGN, m_design_page, _L("Design"), "tab_design_active");
         }
 #endif
-        m_tabpanel->InsertPage(prepare_pos, TAB_ID_PREPARE, m_plater, _L("Prepare"), "tab_3d_active");
-        m_tabpanel->InsertPage(prepare_pos + 1, TAB_ID_PREVIEW, m_plater, _L("Preview"), "tab_preview_active");
+        m_tabpanel->InsertPage(prepare_pos, TAB_ID_PREPARE, m_plater_book, _L("Prepare"), "tab_3d_active");
+        m_tabpanel->InsertPage(prepare_pos + 1, TAB_ID_PREVIEW, m_plater_book, _L("Preview"), "tab_preview_active");
         m_main_sizer->Add(m_tabpanel, 1, wxEXPAND | wxTOP, 0);
 
         m_tabpanel->Bind(wxCUSTOMEVT_NOTEBOOK_SEL_CHANGED, [this](wxCommandEvent& evt)
@@ -1275,13 +1290,16 @@ void MainFrame::update_layout()
         });
 
         m_plater->Show();
+        m_plater_book->Show();
         m_tabpanel->Show();
 
         break;
     }
     case ESettingsLayout::GCodeViewer:
     {
-        m_main_sizer->Add(m_plater, 1, wxEXPAND);
+        m_main_sizer->Add(m_plater_book, 1, wxEXPAND);
+        m_project_tab_bar->Hide();
+        m_plater_book->Show();
         //BBS: add bed exclude area
         m_plater->set_bed_shape({{0.0, 0.0}, {200.0, 0.0}, {200.0, 200.0}, {0.0, 200.0}}, {}, {}, 0.0, {}, {}, {}, {}, true);
         m_plater->get_collapse_toolbar().set_enabled(false);
@@ -1346,8 +1364,13 @@ void MainFrame::shutdown()
     if (ProjectPanel* project = ProjectPanel::if_built())
         project->shutdown();
     m_plugin_pages->shutdown();
-    if (m_plater != nullptr)
-        m_plater->remove_dock_panes();
+    m_project_tab_timer.Stop();
+    std::vector<Plater*> all_platers;
+    for (const ProjectTab& tab : m_project_tabs)
+        all_platers.push_back(tab.plater);
+    all_platers.insert(all_platers.end(), m_spare_platers.begin(), m_spare_platers.end());
+    for (Plater* plater : all_platers)
+        plater->remove_dock_panes();
 #ifdef SLIC3R_CAD
     if (DesignPanel* design = DesignPanel::if_built())
         design->shutdown();
@@ -1371,16 +1394,16 @@ void MainFrame::shutdown()
  	}
 #endif // _WIN32
 
-    if (m_plater != nullptr) {
-        m_plater->get_ui_job_worker().cancel_all();
+    for (Plater* plater : all_platers) {
+        plater->get_ui_job_worker().cancel_all();
 
         // Unbinding of wxWidgets event handling in canvases needs to be done here because on MAC,
         // when closing the application using Command+Q, a mouse event is triggered after this lambda is completed,
         // causing a crash
-        m_plater->unbind_canvas_event_handlers();
+        plater->unbind_canvas_event_handlers();
 
         // Cleanup of canvases' volumes needs to be done here or a crash may happen on some Linux Debian flavours
-        m_plater->reset_canvas_volumes();
+        plater->reset_canvas_volumes();
     }
 
     // Weird things happen as the Paint messages are floating around the windows being destructed.
@@ -1393,12 +1416,12 @@ void MainFrame::shutdown()
         // call Close() to trigger call to lambda defined into GUI_App::persist_window_geometry()
         m_settings_dialog.Close();
 
-    if (m_plater != nullptr) {
+    if (m_first_plater != nullptr) {
         // Stop the background thread (Windows and Linux).
         // Disconnect from a 3DConnextion driver (OSX).
-        m_plater->get_mouse3d_controller().shutdown();
+        m_first_plater->get_mouse3d_controller().shutdown();
         // Store the device parameter database back to appconfig.
-        m_plater->get_mouse3d_controller().save_config(*wxGetApp().app_config);
+        m_first_plater->get_mouse3d_controller().save_config(*wxGetApp().app_config);
     }
 
     // stop agent
@@ -1524,7 +1547,7 @@ void MainFrame::init_tabpanel() {
         wxWindow* panel = m_tabpanel->GetCurrentPage();
         //wxString page_text = m_tabpanel->GetPageText(sel);
         m_last_selected_tab = m_tabpanel->GetSelectedPageName();
-        if (panel == m_plater) {
+        if (panel == m_plater_book) {
             if (m_last_selected_tab == TAB_ID_PREPARE) {
                 wxPostEvent(m_plater, SimpleEvent(EVT_GLVIEWTOOLBAR_3D));
                 m_param_panel->OnActivate();
@@ -1587,11 +1610,34 @@ void MainFrame::init_tabpanel() {
         m_param_panel = new ParamsPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBK_LEFT | wxTAB_TRAVERSAL);
     }
 
-    m_plater = new Plater(this, this);
+    // Print farm: the Prepare/Preview page holds the project tab strip and one Plater per project.
+    m_plater_book = new PlaterBook(this);
+    auto* plater_book_sizer = new wxBoxSizer(wxVERTICAL);
+    m_project_tab_bar = new ProjectTabBar(m_plater_book, {
+        [this](size_t index) { select_project_tab(index); },
+        [this](size_t index) { close_project_tab(index); },
+        [this]() { new_project_tab(); } });
+    plater_book_sizer->Add(m_project_tab_bar, 0, wxEXPAND);
+    m_plater_book->SetSizer(plater_book_sizer);
+
+    m_plater = new Plater(m_plater_book, this);
     m_plater->SetBackgroundColour(*wxWHITE);
+    plater_book_sizer->Add(m_plater, 1, wxEXPAND);
     m_plater->Hide();
+    m_project_tabs.push_back({ m_plater, std::nullopt });
+    m_first_plater = m_plater;
 
     wxGetApp().plater_ = m_plater;
+
+    // Project names and the modified mark change from many places; the strip catches up here.
+    m_project_tab_timer.SetOwner(this);
+    Bind(wxEVT_TIMER, [this](wxTimerEvent& evt) {
+        if (&evt.GetTimer() == &m_project_tab_timer)
+            refresh_project_tab_bar();
+        else
+            evt.Skip();
+    });
+    m_project_tab_timer.Start(1000);
 
 #ifdef SLIC3R_CAD
     // The experimental feature is off by default, and when it is off the page is never
@@ -3043,8 +3089,11 @@ void MainFrame::init_menubar_as_editor()
 #endif
         // New Project
         append_shortcut_item(fileMenu, Shortcut::NewProject, true, _L("New Project"), _L("Start a new project"),
-            [this](wxCommandEvent&) { if (m_plater) m_plater->new_project(); }, "", nullptr,
+            [this](wxCommandEvent&) { if (m_plater) new_project_or_tab(); }, "", nullptr,
             [this](){return can_start_new_project(); }, this);
+        append_menu_item(fileMenu, wxID_ANY, _L("Close Project Tab"), _L("Close the current project tab"),
+            [this](wxCommandEvent&) { close_current_project_tab(); }, "", nullptr,
+            [this]() { return m_plater != nullptr && wxGetApp().is_editor(); }, this);
         // Open Project
 
 #ifndef __APPLE__
@@ -4945,6 +4994,177 @@ void SettingsDialog::on_dpi_changed(const wxRect& suggested_rect)
     Refresh();
 }
 
+
+// Print farm project tabs ------------------------------------------------------------------------
+
+void MainFrame::activate_plater(Plater* plater)
+{
+    Plater* old = m_plater;
+    m_plater           = plater;
+    wxGetApp().plater_ = plater;
+    // wxPanel::Show: Plater::Show also shows or hides the Slice and Print buttons, which belong to
+    // the page, not to a tab.
+    if (old != nullptr && old != plater)
+        old->wxPanel::Show(false);
+    plater->wxPanel::Show(true);
+    m_plater_book->Layout();
+
+    // These cache the plater they were built for.
+    auto drop = [](auto*& dialog) {
+        if (dialog != nullptr) {
+            dialog->Destroy();
+            dialog = nullptr;
+        }
+    };
+    drop(m_temp_calib_dlg);
+    drop(m_vol_test_dlg);
+    drop(m_pa_calib_dlg);
+
+    m_plater->on_project_tab_activated(m_tabpanel != nullptr && m_tabpanel->GetSelectedPageName() == TAB_ID_PREVIEW);
+    if (m_param_panel != nullptr)
+        m_param_panel->switch_to_global();
+    update_slice_print_status(eEventSliceUpdate, true, true);
+    refresh_project_tab_bar();
+}
+
+void MainFrame::select_project_tab(size_t index)
+{
+    if (index >= m_project_tabs.size() || m_project_tabs[index].plater == m_plater)
+        return;
+    if (!m_plater->get_ui_job_worker().is_idle()) {
+        show_info(this, _L("Wait for the current operation to finish before switching project tabs."), _L("Project tabs"));
+        return;
+    }
+    wxBusyCursor busy;
+    Plater* old = m_plater;
+    m_plater->on_project_tab_deactivated();
+    m_project_tabs[m_active_project_tab].presets = wxGetApp().preset_bundle->document_state();
+
+    m_active_project_tab = index;
+    ProjectTab& tab      = m_project_tabs[index];
+    if (tab.presets) {
+        wxGetApp().preset_bundle->restore_document_state(*tab.presets);
+        tab.presets.reset();
+    }
+    // Before load_current_presets(): it reports the presets to wxGetApp().plater().
+    Plater* plater     = tab.plater;
+    m_plater           = plater;
+    wxGetApp().plater_ = plater;
+    wxGetApp().load_current_presets(false, false);
+    m_plater = old;
+    activate_plater(plater);
+}
+
+Plater* MainFrame::new_project_tab()
+{
+    if (m_plater == nullptr || !wxGetApp().is_editor())
+        return m_plater;
+    if (!m_plater->get_ui_job_worker().is_idle()) {
+        show_info(this, _L("Wait for the current operation to finish before opening a project tab."), _L("Project tabs"));
+        return nullptr;
+    }
+    wxBusyCursor busy;
+    Plater* old = m_plater;
+    m_plater->on_project_tab_deactivated();
+    PresetBundle::DocumentState presets = wxGetApp().preset_bundle->document_state();
+    m_project_tabs[m_active_project_tab].presets = presets;
+
+    Plater* plater = nullptr;
+    if (!m_spare_platers.empty()) {
+        plater = m_spare_platers.back();
+        m_spare_platers.pop_back();
+    } else {
+        plater = new Plater(m_plater_book, this);
+        plater->SetBackgroundColour(*wxWHITE);
+        plater->wxPanel::Show(false);
+        m_plater_book->GetSizer()->Add(plater, 1, wxEXPAND);
+    }
+    m_project_tabs.push_back({ plater, std::nullopt });
+    m_active_project_tab = m_project_tabs.size() - 1;
+
+    // A new project starts from the same printer and materials, without their unsaved edits
+    // or the other project's embedded presets.
+    presets.embedded.clear();
+    wxGetApp().preset_bundle->restore_document_state(presets, true);
+    m_plater           = plater;
+    wxGetApp().plater_ = plater;
+    wxGetApp().load_current_presets(false, false);
+    // Silent: no prompt, the new tab has nothing to lose.
+    plater->new_project(true, true, wxString(), false);
+    m_plater = old;
+    activate_plater(plater);
+    return plater;
+}
+
+void MainFrame::new_project_or_tab()
+{
+    if (m_plater == nullptr)
+        return;
+    if (m_plater->is_empty_project() && m_plater->get_project_filename().IsEmpty())
+        m_plater->new_project();
+    else
+        new_project_tab();
+}
+
+bool MainFrame::close_project_tab(size_t index)
+{
+    if (index >= m_project_tabs.size())
+        return false;
+    // Only the tab on screen can ask to be saved or be emptied: both go through wxGetApp().plater().
+    select_project_tab(index);
+    if (m_project_tabs[m_active_project_tab].plater != m_plater)
+        return false;
+
+    auto check = [](bool yes_or_no) {
+        return yes_or_no || wxGetApp().check_and_save_current_preset_changes(_L("Closing project"), _L("Some presets are modified."));
+    };
+    if (m_plater->close_with_confirm(check) == wxID_CANCEL)
+        return false;
+
+    if (m_project_tabs.size() == 1) {
+        // The last tab stays: it becomes an empty project.
+        m_plater->new_project(true, false);
+        refresh_project_tab_bar();
+        return true;
+    }
+
+    Plater* closing = m_plater;
+    closing->new_project(true, true, wxString(), false);
+    closing->on_project_tab_deactivated();
+    m_project_tabs.erase(m_project_tabs.begin() + index);
+    m_spare_platers.push_back(closing);
+
+    // The tab on the right takes its place, as in most tabbed applications.
+    m_active_project_tab = std::min(index, m_project_tabs.size() - 1);
+    ProjectTab& tab      = m_project_tabs[m_active_project_tab];
+    if (tab.presets) {
+        wxGetApp().preset_bundle->restore_document_state(*tab.presets);
+        tab.presets.reset();
+    }
+    m_plater           = tab.plater;
+    wxGetApp().plater_ = tab.plater;
+    wxGetApp().load_current_presets(false, false);
+    m_plater = closing;
+    activate_plater(tab.plater);
+    return true;
+}
+
+void MainFrame::refresh_project_tab_bar()
+{
+    if (m_project_tab_bar == nullptr)
+        return;
+    std::vector<wxString> labels;
+    labels.reserve(m_project_tabs.size());
+    for (const ProjectTab& tab : m_project_tabs) {
+        wxString name = tab.plater->get_project_name();
+        if (name.empty())
+            name = _L("Untitled");
+        if (tab.plater->is_project_dirty())
+            name += "*";
+        labels.push_back(name);
+    }
+    m_project_tab_bar->set_tabs(labels, m_active_project_tab);
+}
 
 } // GUI
 } // Slic3r

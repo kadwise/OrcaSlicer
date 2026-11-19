@@ -428,6 +428,18 @@ public:
     std::optional<Selection> selection() const;
     void                     restore_selection(const Selection &selection);
 
+    // Print farm: the preset state one open project tab owns, so tabs switch without reloading
+    // their projects. Unlike Selection it keeps the project-embedded presets, copied, and does not
+    // assume the preset lists kept their length (a preset may be saved or deleted in another tab).
+    struct DocumentState
+    {
+        Selection           selection;
+        std::vector<Preset> embedded;
+    };
+    DocumentState document_state() const;
+    // discard_edits starts the tab from the saved presets, as a new project does.
+    void          restore_document_state(const DocumentState &state, bool discard_edits = false);
+
     //BBS: find printer model
     std::string get_texture_for_printer_model(std::string model_name);
     std::string get_stl_model_for_printer_model(std::string model_name);

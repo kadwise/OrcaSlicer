@@ -379,6 +379,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/LinuxDisplayBackend.cpp
     GUI/LinuxDisplayBackend.hpp
     GUI/MainFrame.cpp
+    GUI/ProjectTabBar.cpp
+    GUI/ProjectTabBar.hpp
     GUI/MainFrame.hpp
     GUI/MarkdownTip.cpp
     GUI/MarkdownTip.hpp

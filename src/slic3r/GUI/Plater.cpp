@@ -7615,6 +7615,9 @@ struct Plater::priv
     std::vector<std::vector<DynamicPrintConfig>> get_extruder_filament_info();
     void update_print_volume_state();
     void schedule_background_process();
+    // Print farm: true while another project tab is the active one. The preset bundle then holds
+    // that tab's presets, so this one must not apply them to its prints.
+    bool is_inactive_tab() const { const Plater* active = wxGetApp().plater(); return active != nullptr && active != q; }
     void schedule_auto_reslice_if_needed();
     void trigger_auto_reslice_now();
     int  auto_slice_delay_seconds() const;
@@ -7931,6 +7934,9 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     , partplate_list(this->q, &model)
 {
     m_is_dark = wxGetApp().app_config->get("dark_color_mode") == "1";
+    // Print farm: app-wide services (3D mouse, removable drives, other instances) attach to the
+    // first project tab only. It is never destroyed: closing its tab only empties it.
+    const bool is_first_tab = wxGetApp().plater() == nullptr;
 
     m_aui_mgr.init(q);
 
@@ -8311,7 +8317,9 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     mouse3d_controller.load_config(*wxGetApp().app_config);
     // Start the background thread to detect and connect to a HID device (Windows and Linux).
     // Connect to a 3DConnextion driver (OSX).
-    mouse3d_controller.init();
+    // Print farm: only the first project tab drives the device; extra tabs would fight over it.
+    if (is_first_tab)
+        mouse3d_controller.init();
 #ifdef _WIN32
     // Register an USB HID (Human Interface Device) attach event. evt contains Win32 path to the USB device containing VID, PID and other info.
     // This event wakes up the Mouse3DController's background thread to enumerate HID devices, if the VID of the callback event
@@ -8357,7 +8365,8 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
             notification_manager->device_ejected();
         });
         // Start the background thread and register this window as a target for update events.
-        wxGetApp().removable_drive_manager()->init(this->q);
+        if (is_first_tab)
+            wxGetApp().removable_drive_manager()->init(this->q);
 #ifdef _WIN32
         //Trigger enumeration of removable media on Win32 notification.
         this->q->Bind(EVT_VOLUME_ATTACHED, [](VolumeAttachedEvent &evt) { wxGetApp().removable_drive_manager()->volumes_changed(); });
@@ -8430,7 +8439,8 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     this->q->Bind(EVT_INSTANCE_GO_TO_FRONT, [this](InstanceGoToFrontEvent &) {
         bring_instance_forward();
     });
-    wxGetApp().other_instance_message_handler()->init(this->q);
+    if (is_first_tab)
+        wxGetApp().other_instance_message_handler()->init(this->q);
 
     // collapse sidebar according to saved value
     //if (wxGetApp().is_editor()) {
@@ -11433,6 +11443,8 @@ void Plater::priv::scale_selection_to_fit_print_volume()
 
 void Plater::priv::schedule_background_process()
 {
+    if (is_inactive_tab())
+        return;
     delayed_error_message.clear();
     // Trigger the timer event after 0.5s
     this->background_process_timer.Start(500, wxTIMER_ONE_SHOT);
@@ -11718,6 +11730,8 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
 {
     // bitmap of enum UpdateBackgroundProcessReturnState
     unsigned int return_state = 0;
+    if (is_inactive_tab())
+        return return_state;
 
     // If the update_background_process() was not called by the timer, kill the timer,
     // so the update_restart_background_process() will not be called again in vain.
@@ -11948,6 +11962,8 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
 // Restart background processing thread based on a bitmask of UpdateBackgroundProcessReturnState.
 bool Plater::priv::restart_background_process(unsigned int state)
 {
+    if (is_inactive_tab())
+        return false;
     if (!m_worker.is_idle()) {
         // Avoid a race condition
         BOOST_LOG_TRIVIAL(warning) << __FUNCTION__ << boost::format(", Line %1%: ui jobs running, return false")%__LINE__;
@@ -14231,8 +14247,8 @@ UVEditorPanel* Plater::priv::make_uv_editor()
 
 void Plater::priv::on_tab_selection_changing(wxBookCtrlEvent& e)
 {
-    // Ignore event raised by child controls
-    if (!(main_frame->m_tabpanel && e.GetId() == main_frame->m_tabpanel->GetId())) {
+    // Ignore event raised by child controls, and leave it to the active project tab.
+    if (!(main_frame->m_tabpanel && e.GetId() == main_frame->m_tabpanel->GetId()) || is_inactive_tab()) {
         e.Skip();
         return;
     }
@@ -16511,6 +16527,22 @@ void Plater::load_project(wxString const& filename2,
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "filename is: " << filename2 << "and originfile is: " << originfile;
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__;
     auto filename = filename2;
+
+    // Print farm: a project opened while this tab already holds one gets a tab of its own.
+    // Restoring a backup ("originfile" names its source) keeps replacing, as before.
+    const bool opens_project = originfile == "-" || originfile == "<loadall>" || originfile == "<silence>";
+    if (opens_project && wxGetApp().mainframe != nullptr && wxGetApp().plater() == this &&
+        !(is_empty_project() && get_project_filename().IsEmpty())) {
+        if (filename.empty())
+            wxGetApp().load_project(this, filename);
+        if (filename.empty())
+            return;
+        if (Plater* tab = wxGetApp().mainframe->new_project_tab(); tab != nullptr && tab != this) {
+            tab->load_project(filename, originfile);
+            return;
+        }
+    }
+
     auto check = [&filename, this] (bool yes_or_no) {
         if (!yes_or_no && !wxGetApp().check_and_save_current_preset_changes(_L("Load project"),
                 _L("Some presets are modified.")))
@@ -19456,6 +19488,27 @@ int Plater::get_3mf_file_count(std::vector<fs::path> paths)
         }
     }
     return count;
+}
+
+void Plater::on_project_tab_deactivated()
+{
+    p->background_process_timer.Stop();
+    p->auto_reslice_timer.Stop();
+    if (p->background_process.running())
+        p->background_process.stop();
+    // Painting, cutting and the other gizmos edit the project on screen.
+    p->view3D->get_canvas3d()->get_gizmos_manager().reset_all_states();
+}
+
+void Plater::on_project_tab_activated(bool preview)
+{
+    p->sidebar_layout.is_enabled = !m_only_gcode;
+    p->sidebar_layout.show       = true;
+    p->update_sidebar(true);
+    p->select_view_3D(preview ? "Preview" : "3D");
+    sidebar().update_all_preset_comboboxes();
+    update();
+    get_current_canvas3D()->set_as_dirty();
 }
 
 void Plater::add_projects_as_plates()

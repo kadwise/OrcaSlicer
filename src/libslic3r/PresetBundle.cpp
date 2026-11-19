@@ -6018,6 +6018,63 @@ void PresetBundle::restore_selection(const Selection &selection)
 }
 
 
+PresetBundle::DocumentState PresetBundle::document_state() const
+{
+    DocumentState state;
+    auto capture = [&state](const PresetCollection &presets, Selection::Collection &out) {
+        out.selected = presets.get_selected_preset_name();
+        out.edited   = presets.get_edited_preset().config;
+        out.saved    = presets.m_saved_preset.config;
+        out.visible.reserve(presets.m_presets.size());
+        for (const Preset &preset : presets.m_presets) {
+            out.visible.push_back(preset.is_visible);
+            if (preset.is_project_embedded)
+                state.embedded.push_back(preset);
+        }
+    };
+    capture(this->prints, state.selection.prints);
+    capture(this->filaments, state.selection.filaments);
+    capture(this->printers, state.selection.printers);
+    state.selection.filament_presets    = this->filament_presets;
+    state.selection.project_config      = this->project_config;
+    state.selection.extruder_ams_counts = this->extruder_ams_counts;
+    return state;
+}
+
+void PresetBundle::restore_document_state(const DocumentState &state, bool discard_edits)
+{
+    auto restore = [&state, discard_edits](PresetCollection &presets, const Selection::Collection &saved) {
+        presets.reset_project_embedded_presets();
+        presets.lock();
+        for (const Preset &preset : state.embedded) {
+            if (preset.type != presets.type())
+                continue;
+            auto it = presets.find_preset_internal(preset.name);
+            if (it == presets.m_presets.end() || it->name != preset.name)
+                presets.m_presets.emplace(it, preset);
+        }
+        presets.unlock();
+        // Visibility is kept by index, so only when no preset was added or removed since.
+        if (presets.m_presets.size() == saved.visible.size())
+            for (size_t i = 0; i < saved.visible.size(); ++i)
+                presets.m_presets[i].is_visible = saved.visible[i];
+        presets.select_preset_by_name(saved.selected, true);
+        if (!discard_edits && presets.get_selected_preset_name() == saved.selected) {
+            presets.m_saved_preset.config      = saved.saved;
+            presets.get_edited_preset().config = saved.edited;
+        }
+        presets.update_dirty();
+    };
+    restore(this->printers, state.selection.printers);
+    restore(this->prints, state.selection.prints);
+    restore(this->filaments, state.selection.filaments);
+    this->update_compatible(PresetSelectCompatibleType::Never);
+    this->update_multi_material_filament_presets();
+    this->filament_presets    = state.selection.filament_presets;
+    this->project_config      = state.selection.project_config;
+    this->extruder_ams_counts = state.selection.extruder_ams_counts;
+}
+
 //some filament presets split from one to sperate ones
 //following map recording these filament presets
 //for example: previously ''Bambu PLA Basic @BBL H2D 0.6 nozzle' was saved in ''Bambu PLA Basic @BBL H2D' with 0.4

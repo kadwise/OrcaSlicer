@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <memory>
 #include "libslic3r/Config.hpp"
+#include "libslic3r/PresetBundle.hpp"
+#include <optional>
 #include "slic3r/GUI/Lazy.hpp"
 #include <wx/event.h>
 #include <functional>
@@ -73,6 +75,8 @@ namespace GUI
 {
 
 class Tab;
+class PlaterBook;
+class ProjectTabBar;
 class PrintHostQueueDialog;
 class DiffPresetDialog;
 class ParamsPanel;
@@ -513,7 +517,21 @@ public:
     // BBS. Replace title bar and menu bar with top bar.
     BBLTopbar*            m_topbar{ nullptr };
     PrintHostQueueDialog* printhost_queue_dlg() { return m_printhost_queue_dlg; }
+    // The active project tab's plater. Print farm: every open project has its own Plater, kept
+    // in m_project_tabs; wxGetApp().plater() follows the selected tab.
     Plater*               m_plater { nullptr };
+
+    // Print farm: projects open in tabs, FreeCAD style.
+    // Opens an empty project in a new tab, makes it the active one and returns its plater.
+    Plater* new_project_tab();
+    // A new project: in the current tab when it is still empty, else in a new tab.
+    void    new_project_or_tab();
+    void    select_project_tab(size_t index);
+    // Asks to save a modified project first. Returns false when the user cancelled.
+    bool    close_project_tab(size_t index);
+    void    close_current_project_tab() { close_project_tab(m_active_project_tab); }
+    size_t  project_tab_count() const { return m_project_tabs.size(); }
+    void    refresh_project_tab_bar();
     // Lazy pages, created once and kept for the frame's life; their panels are reached
     // through LazyInstance's statics, and show_device() only moves pages in and out of the book.
 #ifdef SLIC3R_CAD
@@ -522,6 +540,25 @@ public:
     // the tab that is shown: its own history when that is Design, the plater's otherwise.
     DesignPanel*           shown_design_panel() const;
 #endif
+private:
+    struct ProjectTab
+    {
+        Plater*                                    plater{ nullptr };
+        // The presets of the tab while another tab is active.
+        std::optional<PresetBundle::DocumentState> presets;
+    };
+    PlaterBook*             m_plater_book{ nullptr };
+    ProjectTabBar*          m_project_tab_bar{ nullptr };
+    std::vector<ProjectTab> m_project_tabs;
+    // Platers of closed tabs, emptied and kept for the next new tab: tearing down the 3D views of
+    // a live plater is not something the rest of the application expects.
+    std::vector<Plater*>    m_spare_platers;
+    size_t                  m_active_project_tab{ 0 };
+    // The first plater owns the app-wide services (3D mouse, removable drives) and is never destroyed.
+    Plater*                 m_first_plater{ nullptr };
+    wxTimer                 m_project_tab_timer;
+    void                    activate_plater(Plater* plater);
+public:
     // The top bar's Undo/Redo, for a tab that keeps its own history (Design).
     void set_undo_redo_enabled(bool undo, bool redo);
     //BBS: GUI refactor
