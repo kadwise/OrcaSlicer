@@ -37,7 +37,9 @@ jobs:
         env:
           OFFSETS: ${{ inputs.offsets }}
         run: |
-          Get-ChildItem -Recurse pdb, app -Include *.pdb, OrcaSlicer.dll | Select-Object FullName, Length | Format-Table -AutoSize
+          # The PDB artifact holds a 7z archive of the PDBs.
+          Get-ChildItem -Recurse pdb -Filter *.7z | ForEach-Object { & "C:\Program Files\7-Zip\7z.exe" x $_.FullName "-opdb\extracted" -y | Out-Null }
+          Get-ChildItem -Recurse pdb, app -Include *.pdb, *.7z, OrcaSlicer.dll | Select-Object FullName, Length | Format-Table -AutoSize
           $dll = (Get-ChildItem -Recurse app -Filter OrcaSlicer.dll | Select-Object -First 1).FullName
           $pdb = (Get-ChildItem -Recurse pdb -Filter OrcaSlicer.pdb | Select-Object -First 1).FullName
           if (-not $pdb) { $pdb = (Get-ChildItem -Recurse pdb -Filter *.pdb | Sort-Object Length -Descending | Select-Object -First 1).FullName }
