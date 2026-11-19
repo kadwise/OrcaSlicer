@@ -19,6 +19,9 @@ public:
 
     // A tab's sidebar pane: docked left by default, movable to the right or floating, no close button.
     static wxAuiPaneInfo sidebar_pane_info();
+    // Print farm: a pane split out of the sidebar (Objects, Process), stacked under it by default
+    // at `position`, movable to the right or floating, no close button.
+    static wxAuiPaneInfo sidebar_section_pane_info(const wxString& name, const wxString& caption, int position);
 
     wxAuiFloatingFrame* CreateFloatingFrame(wxWindow* parent, const wxAuiPaneInfo& pane) override;
 };

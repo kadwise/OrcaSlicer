@@ -256,6 +256,10 @@ public:
     ObjectSettings*         obj_settings();
     ObjectLayers*           obj_layers();
     wxPanel*                scrolled_panel();
+    // Print farm, FreeCAD style: the parts list and the process settings are panes of their own,
+    // children of the plater, docked beside the sidebar.
+    wxPanel*                objects_page() const;
+    wxPanel*                process_page() const;
     wxPanel* print_panel();
     wxPanel* filament_panel();
 

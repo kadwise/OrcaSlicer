@@ -939,6 +939,9 @@ struct Sidebar::priv
     // Print farm: where the shared params panel's title bar and body sit in this sidebar.
     wxBoxSizer *params_top_slot{ nullptr };
     wxBoxSizer *params_body_slot{ nullptr };
+    // Print farm: the Objects and Process panes.
+    wxPanel    *objects_page{ nullptr };
+    wxPanel    *process_page{ nullptr };
 
     //wxComboBox *                m_comboBox_print_preset;
     wxStaticLine *              m_staticline1;
@@ -3576,22 +3579,31 @@ Sidebar::Sidebar(Plater *parent)
     // the plater's parent.
     auto* main_frame   = dynamic_cast<MainFrame*>(wxGetTopLevelParent(parent));
     auto  params_panel = main_frame != nullptr ? main_frame->m_param_panel : nullptr;
+    // Print farm: the process settings live in a pane of their own (see Plater::priv's AUI setup).
+    p->process_page = new wxPanel(parent);
+    p->process_page->SetBackgroundColour(*wxWHITE);
+    auto* process_sizer = new wxBoxSizer(wxVERTICAL);
+    p->process_page->SetSizer(process_sizer);
     if (params_panel) {
-        auto spliter_1 = new ::StaticLine(p->scrolled);
+        auto spliter_1 = new ::StaticLine(p->process_page);
         spliter_1->SetLineColour("#A6A9AA");
-        scrolled_sizer->Add(spliter_1, 0, wxEXPAND);
+        process_sizer->Add(spliter_1, 0, wxEXPAND);
         p->params_top_slot = new wxBoxSizer(wxVERTICAL);
-        scrolled_sizer->Add(p->params_top_slot, 0, wxEXPAND);
-        auto spliter_2 = new ::StaticLine(p->scrolled);
+        process_sizer->Add(p->params_top_slot, 0, wxEXPAND);
+        auto spliter_2 = new ::StaticLine(p->process_page);
         spliter_2->SetLineColour("#CECECE");
-        scrolled_sizer->Add(spliter_2, 0, wxEXPAND);
+        process_sizer->Add(spliter_2, 0, wxEXPAND);
     }
 
     //add project content
+    // Print farm: the parts list lives in a pane of its own.
+    p->objects_page = new wxPanel(parent);
+    p->objects_page->SetBackgroundColour(*wxWHITE);
     p->sizer_params = new wxBoxSizer(wxVERTICAL);
+    p->objects_page->SetSizer(p->sizer_params);
 
     // ORCA: Update search box to modern style
-    p->m_search_bar = new StaticBox(p->scrolled);
+    p->m_search_bar = new StaticBox(p->objects_page);
     p->m_search_bar->SetCornerRadius(0);
     p->m_search_bar->SetBorderColor(wxColour("#CECECE"));
 
@@ -3628,7 +3640,7 @@ Sidebar::Sidebar(Plater *parent)
     p->m_search_bar->Layout();
     search_sizer->Fit(p->m_search_bar);
 
-    p->m_object_list = new ObjectList(p->scrolled);
+    p->m_object_list = new ObjectList(p->objects_page);
     p->m_object_list->SetBackgroundColour(*wxWHITE);
     p->m_object_list->Bind(wxCUSTOMEVT_EXIT_SEARCH, [this](wxCommandEvent&) {
 #ifdef __WXGTK__
@@ -3640,7 +3652,6 @@ Sidebar::Sidebar(Plater *parent)
 
     p->sizer_params->Add(p->m_search_bar, 0, wxALL | wxEXPAND, 0);
     p->sizer_params->Add(p->m_object_list, 1, wxEXPAND | wxTOP, 0);
-    scrolled_sizer->Add(p->sizer_params, 2, wxEXPAND | wxLEFT, 0);
     p->m_object_list->Hide();
     p->m_search_bar->Hide();
     // Frequently Object Settings
@@ -3653,13 +3664,13 @@ Sidebar::Sidebar(Plater *parent)
 #else
     if (params_panel) {
         p->params_body_slot = new wxBoxSizer(wxVERTICAL);
-        scrolled_sizer->Add(p->params_body_slot, 3, wxEXPAND);
+        process_sizer->Add(p->params_body_slot, 1, wxEXPAND);
         attach_params_panel();
     }
 #endif
     }
 
-    p->object_layers = new ObjectLayers(p->scrolled);
+    p->object_layers = new ObjectLayers(p->objects_page);
     p->object_layers->Hide();
     p->sizer_params->Add(p->object_layers->get_sizer(), 0, wxEXPAND | wxTOP, 0);
 
@@ -3829,16 +3840,16 @@ void Sidebar::attach_params_panel()
     if (params_panel == nullptr || p->params_top_slot == nullptr || p->params_body_slot == nullptr)
         return;
     auto move_into = [this](wxWindow* window, wxBoxSizer* slot) {
-        if (window->GetParent() == p->scrolled && window->GetContainingSizer() == slot)
+        if (window->GetParent() == p->process_page && window->GetContainingSizer() == slot)
             return;
         if (wxSizer* old_sizer = window->GetContainingSizer())
             old_sizer->Detach(window);
-        window->Reparent(p->scrolled);
+        window->Reparent(p->process_page);
         slot->Add(window, 1, wxEXPAND);
     };
     move_into(params_panel->get_top_panel(), p->params_top_slot);
     move_into(params_panel, p->params_body_slot);
-    p->scrolled->Layout();
+    p->process_page->Layout();
 }
 
 void Sidebar::update_all_preset_comboboxes(bool update_filament_combos)
@@ -6736,6 +6747,9 @@ ObjectLayers* Sidebar::obj_layers()
     return p->object_layers;
 }
 
+wxPanel* Sidebar::objects_page() const { return p->objects_page; }
+wxPanel* Sidebar::process_page() const { return p->process_page; }
+
 wxPanel* Sidebar::scrolled_panel()
 {
     return p->scrolled;
@@ -6966,6 +6980,7 @@ bool Sidebar::show_object_list(bool show) const
         p->object_layers->Show(false);
     else
         p->m_object_list->part_selection_changed();
+    p->objects_page->Layout();
     p->scrolled->Layout();
     return true;
 }
@@ -7470,6 +7485,18 @@ struct Plater::priv
     void enable_sidebar(bool enabled);
     void collapse_sidebar(bool collapse);
     void update_sidebar(bool force_update = false);
+    // Print farm: the panes split out of the sidebar.
+    struct SidebarSectionPane
+    {
+        wxWindow* window;
+        wxString  name;
+        wxString  caption;
+        int       position;
+    };
+    std::vector<SidebarSectionPane> sidebar_section_panes() const
+    {
+        return { { sidebar->objects_page(), "objects", _L("Objects"), 1 }, { sidebar->process_page(), "process", _L("Process"), 2 } };
+    }
     // The sidebar shows the selected presets, which a G-code previewed without its own settings has nothing to do
     // with, so it stays hidden then. With the file's settings loaded it shows them, as for a .gcode.3mf.
     bool gcode_preview_without_settings() const { return q->m_only_gcode && !q->m_gcode_settings_loaded; }
@@ -8049,6 +8076,10 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
 
     // Orca: Make sidebar dockable
     m_aui_mgr.AddPane(sidebar, AuiMgr::sidebar_pane_info());
+    // Print farm, FreeCAD style: the parts list and the process settings dock on their own,
+    // stacked under the sidebar until moved.
+    for (const SidebarSectionPane& section : sidebar_section_panes())
+        m_aui_mgr.AddPane(section.window, AuiMgr::sidebar_section_pane_info(section.name, section.caption, section.position));
 
     // The UV editor pane is added by make_uv_editor().
     // Closing the pane with its own X has to reach the gizmo, or its next update would simply show the pane again.
@@ -8103,9 +8134,27 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
             sidebar_layout.is_collapsed = !sidebar.IsShown();
         }
 
+        // A layout saved before the Objects and Process panes existed hides them: stack them under
+        // the sidebar, on its side.
+        for (const SidebarSectionPane& section : sidebar_section_panes()) {
+            if (!aui_pane_layout_entry(cfg->get("window_layout"), section.name.utf8_string()).empty())
+                continue;
+            wxAuiPaneInfo& pane = m_aui_mgr.GetPane(section.window);
+            if (!pane.IsOk())
+                continue;
+            pane.Dock().Show();
+            if (!sidebar.IsFloating())
+                pane.Direction(sidebar.dock_direction).Layer(sidebar.dock_layer).Row(sidebar.dock_row);
+            else
+                pane.Left().Layer(0).Row(0);
+            pane.Position(section.position);
+        }
+
         // Keep tracking the current sidebar size, by storing it using `best_size`, which will be stored
         // in the config and re-applied when the app is opened again.
         m_aui_mgr.track_docked_size(this->sidebar);
+        for (const SidebarSectionPane& section : sidebar_section_panes())
+            m_aui_mgr.track_docked_size(section.window);
 
         // Hide sidebar initially, will re-show it after initialization when we got proper window size
         sidebar.Hide();
@@ -8766,6 +8815,18 @@ void Plater::priv::update_sidebar(bool force_update) {
         const bool should_show = !should_hide;
         if (should_show != sidebar.IsShown()) {
             sidebar.Show(should_show);
+            needs_update = true;
+        }
+    }
+
+    // Print farm: the Objects and Process panes show and hide with the sidebar.
+    for (const SidebarSectionPane& section : sidebar_section_panes()) {
+        wxAuiPaneInfo& pane = m_aui_mgr.GetPane(section.window);
+        if (!pane.IsOk())
+            continue;
+        const bool show = sidebar_layout.is_enabled && !(sidebar_layout.is_collapsed || (pane.IsFloating() && !sidebar_layout.show));
+        if (show != pane.IsShown()) {
+            pane.Show(show);
             needs_update = true;
         }
     }

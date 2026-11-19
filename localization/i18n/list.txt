@@ -151,6 +151,7 @@ src/slic3r/GUI/Calibration.cpp
 src/slic3r/GUI/CameraPopup.cpp
 src/slic3r/GUI/ConnectPrinter.cpp
 src/slic3r/GUI/HMSPanel.cpp
+src/slic3r/GUI/AuiMgr.cpp
 src/slic3r/GUI/MainFrame.cpp
 src/slic3r/GUI/ProjectTabBar.cpp
 src/slic3r/GUI/MediaPlayCtrl.cpp

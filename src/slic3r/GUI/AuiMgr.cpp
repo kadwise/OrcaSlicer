@@ -1,6 +1,7 @@
 #include "AuiMgr.hpp"
 
 #include "GUI_App.hpp"
+#include "I18N.hpp"
 #ifdef __WXGTK__
 #include "LinuxDisplayBackend.hpp"
 #endif
@@ -69,11 +70,32 @@ wxAuiPaneInfo AuiMgr::sidebar_pane_info()
 {
     return wxAuiPaneInfo()
         .Name("sidebar")
+        .Caption(_L("Printer and filaments"))
         .Left()
+        .Layer(0)
+        .Row(0)
+        .Position(0)
         .CloseButton(false)
         .TopDockable(false)
         .BottomDockable(false)
         .BestSize(wxSize(39 * wxGetApp().em_unit(), 90 * wxGetApp().em_unit()));
+}
+
+wxAuiPaneInfo AuiMgr::sidebar_section_pane_info(const wxString& name, const wxString& caption, int position)
+{
+    const int em = wxGetApp().em_unit();
+    return wxAuiPaneInfo()
+        .Name(name)
+        .Caption(caption)
+        .Left()
+        .Layer(0)
+        .Row(0)
+        .Position(position)
+        .CloseButton(false)
+        .TopDockable(false)
+        .BottomDockable(false)
+        .MinSize(wxSize(20 * em, 8 * em))
+        .BestSize(wxSize(39 * em, 30 * em));
 }
 
 wxAuiFloatingFrame* AuiMgr::CreateFloatingFrame(wxWindow* parent, const wxAuiPaneInfo& pane)
