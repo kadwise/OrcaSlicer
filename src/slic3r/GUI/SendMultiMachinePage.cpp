@@ -280,7 +280,7 @@ void SendDeviceItem::doRender(wxDC& dc)
 
     //device state
     if (state_printable <= 2) {
-        dc.SetTextForeground(wxColour(31, 58, 104));
+        dc.SetTextForeground(StateColor::darkModeColorFor(wxColour(31, 58, 104)));
     }
     else {
         dc.SetTextForeground(wxColour(208, 27, 27));
@@ -305,7 +305,7 @@ void SendDeviceItem::doRender(wxDC& dc)
     }
 
     if (m_hover) {
-        dc.SetPen(wxPen(wxColour(31, 58, 104)));
+        dc.SetPen(wxPen(StateColor::darkModeColorFor(wxColour(31, 58, 104))));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
         dc.DrawRoundedRectangle(0, 0, size.x, size.y, 3);
     }
@@ -441,7 +441,7 @@ void SendMultiMachinePage::refresh_user_device()
         return;
     }
 
-    auto all_machine = dev->get_my_cloud_machine_list();
+    auto all_machine = dev->get_my_lan_machine_list();
     auto user_machine = std::map<std::string, MachineObject*>();
 
     //selected machine

@@ -1,4 +1,5 @@
 #include "SwitchButton.hpp"
+#include "slic3r/GUI/Widgets/StateColor.hpp"
 #include "Button.hpp"
 #include "Label.hpp"
 #include "StaticBox.hpp"
@@ -575,7 +576,7 @@ void SwitchBoard::doRender(wxDC &dc)
 
 	/*left*/
     if (switch_left) {
-        is_enable ? dc.SetBrush(wxBrush(wxColour(31, 58, 104))) : dc.SetBrush(disable_color);
+        is_enable ? dc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(31, 58, 104)))) : dc.SetBrush(disable_color);
         dc.DrawRoundedRectangle(0, 0, GetSize().x / 2, GetSize().y, 8);
 	}
 
@@ -593,7 +594,7 @@ void SwitchBoard::doRender(wxDC &dc)
 
 	/*right*/
     if (switch_right) {
-        if (is_enable) {dc.SetBrush(wxBrush(wxColour(31, 58, 104)));
+        if (is_enable) {dc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(31, 58, 104))));
         } else {dc.SetBrush(disable_color);}
         dc.DrawRoundedRectangle(GetSize().x / 2, 0, GetSize().x / 2, GetSize().y, 8);
 	}

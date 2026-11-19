@@ -208,7 +208,7 @@ void LabeledCheckBox::TakeFocus()
 void LabeledCheckBox::ShowFocus(bool focused)
 {
     if (!IsBeingDeleted())
-        m_text_box->SetBorderColor(focused ? wxColour("#1F3A68") : GetBackgroundColour());
+        m_text_box->SetBorderColor(focused ? StateColor::darkModeColorFor(wxColour("#1F3A68")) : GetBackgroundColour());
 }
 
 void LabeledCheckBox::UpdateLabelColor()

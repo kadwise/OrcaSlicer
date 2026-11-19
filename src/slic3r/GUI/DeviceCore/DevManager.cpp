@@ -910,6 +910,18 @@ namespace Slic3r
         return result;
     }
 
+    std::map<std::string, MachineObject*> DeviceManager::get_my_lan_machine_list(const std::string& agent_id)
+    {
+        std::map<std::string, MachineObject*> result;
+        for (auto it = localMachineList.begin(); it != localMachineList.end(); it++)
+        {
+            if (!it->second || (!agent_id.empty() && it->second->printer_agent_id != agent_id))
+                continue;
+            if (it->second->has_access_right()) { result.emplace(*it); }
+        }
+        return result;
+    }
+
     std::string DeviceManager::get_first_online_user_machine() const
     {
         for (auto it = userMachineList.begin(); it != userMachineList.end(); it++)

@@ -5021,9 +5021,20 @@ void MainFrame::activate_plater(Plater* plater)
     drop(m_vol_test_dlg);
     drop(m_pa_calib_dlg);
 
+    // The object, part, layer and plate settings pages are shared by all tabs and hold the
+    // configs of the objects selected when they were last bound: unbind them from the tab left.
+    for (Tab* tab : { wxGetApp().get_model_tab(false), wxGetApp().get_model_tab(true), wxGetApp().get_layer_tab(), wxGetApp().get_plate_tab() })
+        if (auto* model_tab = dynamic_cast<TabPrintModel*>(tab); model_tab != nullptr)
+            model_tab->set_model_config({});
+
     m_plater->on_project_tab_activated(m_tabpanel != nullptr && m_tabpanel->GetSelectedPageName() == TAB_ID_PREVIEW);
-    if (m_param_panel != nullptr)
-        m_param_panel->switch_to_global();
+    if (m_param_panel != nullptr) {
+        // Keep the Global / Objects choice: it also decides whether this tab's parts list shows.
+        m_param_panel->notify_object_config_changed();
+        m_param_panel->set_active_tab(nullptr);
+    }
+    // Bind the settings pages to this tab's selection.
+    m_plater->sidebar().obj_list()->part_selection_changed();
     update_slice_print_status(eEventSliceUpdate, true, true);
     refresh_project_tab_bar();
 }

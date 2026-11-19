@@ -2017,7 +2017,7 @@ void SyncAmsInfoDialog::Enable_Auto_Refill(bool enable)
 {
     if (!m_ams_backup_tip) { return; }
     if (enable) {
-        m_ams_backup_tip->SetForegroundColour(wxColour("#1F3A68"));
+        m_ams_backup_tip->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#1F3A68")));
     } else {
         m_ams_backup_tip->SetForegroundColour(wxColour(0x90, 0x90, 0x90));
     }

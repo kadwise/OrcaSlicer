@@ -31,7 +31,8 @@ namespace GUI {
 #define PICK_LEFT_PRINTABLE    40
 #define PICK_LEFT_DEV_NAME 250
 #define PICK_LEFT_DEV_STATUS 250
-#define PICK_DEVICE_MAX 6
+// Print farm: up to this many printers in the multi-device pages (Bambu allowed 6).
+#define PICK_DEVICE_MAX 64
     
 class MultiMachinePage : public wxPanel, public LazyInstance<MultiMachinePage>
 {

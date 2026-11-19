@@ -588,7 +588,7 @@ public:
         add_label->SetFont(af);
         decompose_label->SetFont(af);
         const bool add_enabled = !m_can_add_filament || m_can_add_filament();
-        const wxColour action_clr = wxColour("#1F3A68");
+        const wxColour action_clr = StateColor::darkModeColorFor(wxColour("#1F3A68"));
         add_label->SetForegroundColour(add_enabled ? action_clr : header_clr);
         decompose_label->SetForegroundColour(add_enabled ? action_clr : header_clr);
         add_label->SetCursor(wxCursor(add_enabled ? wxCURSOR_HAND : wxCURSOR_ARROW));

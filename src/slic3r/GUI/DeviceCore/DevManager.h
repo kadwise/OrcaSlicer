@@ -109,6 +109,9 @@ public:
     MachineObject* get_my_machine(std::string dev_id);
     std::map<std::string, MachineObject*> get_my_machine_list(const std::string& agent_id = "");
     std::map<std::string, MachineObject*> get_my_cloud_machine_list(const std::string& agent_id = "");
+    // Print farm: the printers found on the local network that have an access code, whether
+    // or not they are also bound to a cloud account. The multi-device pages work on these only.
+    std::map<std::string, MachineObject*> get_my_lan_machine_list(const std::string& agent_id = "");
     void modify_device_name(std::string dev_id, std::string dev_name, const std::string& provider);
 
     // id of the currently live IPrinterAgent (IPrinterAgent::get_agent_info().id), or empty if

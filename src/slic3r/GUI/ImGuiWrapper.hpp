@@ -414,6 +414,8 @@ public:
 
     //BBS
     static void on_change_color_mode(bool is_dark);
+    // KadWise accent for the 3D view: navy, or a lighter blue that reads on the dark-mode backgrounds.
+    static ImVec4 accent(float alpha = 1.0f);
     static void push_toolbar_style(const float scale);
     static void pop_toolbar_style();
     static void push_menu_style(const float scale);
