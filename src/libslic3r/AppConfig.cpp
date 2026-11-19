@@ -396,8 +396,9 @@ void AppConfig::set_defaults()
     if (get("show_hints").empty())
         set_bool("show_hints", false);
 //#endif
+    // Print farm build: sending to and managing several printers is on by default.
     if (get("enable_multi_machine").empty())
-        set_bool("enable_multi_machine", false);
+        set_bool("enable_multi_machine", true);
 
     if (get("drc_bits").empty())
         set("drc_bits", DRC_BITS_DEFAULT_STR);

@@ -2733,7 +2733,9 @@ void GUI_App::init_webview_runtime()
 void GUI_App::init_app_config()
 {
 	// Profiles for the alpha are stored into the PrusaSlicer-alpha directory to not mix with the current release.
-    SetAppName(SLIC3R_APP_KEY);
+    // Print farm build: keep settings, printers and plugins in their own folder
+    // (e.g. %APPDATA%\OrcaSlicer-Farm) so it never touches a stock OrcaSlicer install.
+    SetAppName(SLIC3R_APP_KEY "-Farm");
 //	SetAppName(SLIC3R_APP_KEY "-alpha");
 //  SetAppName(SLIC3R_APP_KEY "-beta");
 //	SetAppDisplayName(SLIC3R_APP_NAME);
