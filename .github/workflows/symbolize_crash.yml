@@ -1,0 +1,59 @@
+name: Symbolize crash
+
+# Print farm fork: turns the offsets in a crash_*.log (".text"-section offsets, the "0x1:0x..."
+# column) into function names and lines, using the PDB and DLL of the build that crashed.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build all run that produced the crashing build"
+        required: true
+      offsets:
+        description: "Space-separated section-1 offsets from the crash log, e.g. 0x1ACCBD8 0xAFA675"
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  symbolize:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PDB
+          path: pdb
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: OrcaSlicer_Windows_*_x64_portable
+          path: app
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Symbolize
+        shell: pwsh
+        env:
+          OFFSETS: ${{ inputs.offsets }}
+        run: |
+          Get-ChildItem -Recurse pdb, app -Include *.pdb, OrcaSlicer.dll | Select-Object FullName, Length | Format-Table -AutoSize
+          $dll = (Get-ChildItem -Recurse app -Filter OrcaSlicer.dll | Select-Object -First 1).FullName
+          $pdb = (Get-ChildItem -Recurse pdb -Filter OrcaSlicer.pdb | Select-Object -First 1).FullName
+          if (-not $pdb) { $pdb = (Get-ChildItem -Recurse pdb -Filter *.pdb | Sort-Object Length -Descending | Select-Object -First 1).FullName }
+          Write-Host "DLL: $dll"
+          Write-Host "PDB: $pdb"
+          # llvm-symbolizer looks for the PDB next to the DLL.
+          Copy-Item $pdb (Join-Path (Split-Path $dll) (Split-Path $pdb -Leaf)) -Force
+          $llvm = "C:\Program Files\LLVM\bin"
+          # Image base and the .text section's address, to turn section offsets into addresses.
+          $headers = & "$llvm\llvm-readobj.exe" --file-headers --sections $dll
+          $base = [Convert]::ToUInt64((($headers | Select-String 'ImageBase:' | Select-Object -First 1).Line -split ':\s*')[1].Trim(), 16)
+          $textLine = ($headers | Select-String -Pattern 'VirtualAddress:' | Select-Object -First 1).Line
+          $text = [Convert]::ToUInt64(($textLine -split ':\s*')[1].Trim(), 16)
+          Write-Host ("ImageBase 0x{0:X} .text 0x{1:X}" -f $base, $text)
+          foreach ($off in ($env:OFFSETS -split '\s+' | Where-Object { $_ })) {
+            $addr = $base + $text + [Convert]::ToUInt64($off.Replace('0x', ''), 16)
+            Write-Host ("==== {0} -> 0x{1:X}" -f $off, $addr)
+            & "$llvm\llvm-symbolizer.exe" --obj=$dll --inlines --demangle ("0x{0:X}" -f $addr)
+          }
