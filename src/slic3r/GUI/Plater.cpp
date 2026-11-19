@@ -936,6 +936,9 @@ struct Sidebar::priv
     wxStaticText* m_staticText_print_title;
     wxPanel* m_panel_print_content;
     wxBoxSizer *sizer_params;
+    // Print farm: where the shared params panel's title bar and body sit in this sidebar.
+    wxBoxSizer *params_top_slot{ nullptr };
+    wxBoxSizer *params_body_slot{ nullptr };
 
     //wxComboBox *                m_comboBox_print_preset;
     wxStaticLine *              m_staticline1;
@@ -3569,13 +3572,16 @@ Sidebar::Sidebar(Plater *parent)
 
     {
     //add project title
-    auto params_panel = ((MainFrame*)parent->GetParent())->m_param_panel;
+    // Print farm: the plater may sit in a container, so the frame is the top-level window, not
+    // the plater's parent.
+    auto* main_frame   = dynamic_cast<MainFrame*>(wxGetTopLevelParent(parent));
+    auto  params_panel = main_frame != nullptr ? main_frame->m_param_panel : nullptr;
     if (params_panel) {
-        params_panel->get_top_panel()->Reparent(p->scrolled);
         auto spliter_1 = new ::StaticLine(p->scrolled);
         spliter_1->SetLineColour("#A6A9AA");
         scrolled_sizer->Add(spliter_1, 0, wxEXPAND);
-        scrolled_sizer->Add(params_panel->get_top_panel(), 0, wxEXPAND);
+        p->params_top_slot = new wxBoxSizer(wxVERTICAL);
+        scrolled_sizer->Add(p->params_top_slot, 0, wxEXPAND);
         auto spliter_2 = new ::StaticLine(p->scrolled);
         spliter_2->SetLineColour("#CECECE");
         scrolled_sizer->Add(spliter_2, 0, wxEXPAND);
@@ -3646,8 +3652,9 @@ Sidebar::Sidebar(Plater *parent)
     p->sizer_params->Add(p->object_settings->get_sizer(), 0, wxEXPAND | wxTOP, 5 * em / 10);
 #else
     if (params_panel) {
-        params_panel->Reparent(p->scrolled);
-        scrolled_sizer->Add(params_panel, 3, wxEXPAND);
+        p->params_body_slot = new wxBoxSizer(wxVERTICAL);
+        scrolled_sizer->Add(p->params_body_slot, 3, wxEXPAND);
+        attach_params_panel();
     }
 #endif
     }
@@ -3813,6 +3820,25 @@ void Sidebar::remove_unused_filament_combos(const size_t current_extruder_count)
         else if (c0 > c1)
             sizer_filaments1->AddStretchSpacer(1);
     }
+}
+
+void Sidebar::attach_params_panel()
+{
+    MainFrame*   main_frame   = dynamic_cast<MainFrame*>(wxGetTopLevelParent(this));
+    ParamsPanel* params_panel = main_frame != nullptr ? main_frame->m_param_panel : nullptr;
+    if (params_panel == nullptr || p->params_top_slot == nullptr || p->params_body_slot == nullptr)
+        return;
+    auto move_into = [this](wxWindow* window, wxBoxSizer* slot) {
+        if (window->GetParent() == p->scrolled && window->GetContainingSizer() == slot)
+            return;
+        if (wxSizer* old_sizer = window->GetContainingSizer())
+            old_sizer->Detach(window);
+        window->Reparent(p->scrolled);
+        slot->Add(window, 1, wxEXPAND);
+    };
+    move_into(params_panel->get_top_panel(), p->params_top_slot);
+    move_into(params_panel, p->params_body_slot);
+    p->scrolled->Layout();
 }
 
 void Sidebar::update_all_preset_comboboxes(bool update_filament_combos)
@@ -19544,6 +19570,8 @@ void Plater::on_project_tab_activated(bool preview)
 {
     p->sidebar_layout.is_enabled = !m_only_gcode;
     p->sidebar_layout.show       = true;
+    // The process settings panel is shared: bring it into this tab's sidebar.
+    sidebar().attach_params_panel();
     p->update_sidebar(true);
     p->select_view_3D(preview ? "Preview" : "3D");
     sidebar().update_all_preset_comboboxes();

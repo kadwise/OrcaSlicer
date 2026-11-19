@@ -195,6 +195,9 @@ public:
     void init_filament_combo(PlaterPresetComboBox **combo, const int filament_idx);
     void remove_unused_filament_combos(const size_t current_extruder_count);
     void update_all_preset_comboboxes(bool update_filament_combos = true);
+    // Print farm: the process settings panel is one window shared by every project tab's sidebar;
+    // this moves it into this sidebar's slots.
+    void attach_params_panel();
     //void update_partplate(PartPlateList& list);
     void update_presets(Slic3r::Preset::Type preset_type);
     //BBS
