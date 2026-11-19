@@ -1050,6 +1050,11 @@ public:
     //reload all objects
     int reload_all_objects(bool except_locked = false, int plate_index = -1);
 
+    // Print farm: moves the instances of a project laid out on src_plate_count plates onto
+    // plates first_plate .. first_plate + src_plate_count - 1 of this list, keeping each
+    // instance's position on its plate. The target plates must exist.
+    void move_instances_to_plates(Model& src_model, int src_plate_count, int first_plate);
+
     //reload objects for newly created plate
     int construct_objects_list_for_new_plate(int plate_index);
 

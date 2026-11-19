@@ -396,6 +396,8 @@ public:
     bool open_3mf_file(const boost::filesystem::path &file_path, LoadType resolved_type);
     int  get_3mf_file_count(std::vector<boost::filesystem::path> paths);
     void add_file();
+    // Print farm: appends the plates of other project files to the current project.
+    void add_projects_as_plates();
     // Returns false when no object was added (e.g. the user cancelled the load dialog).
     bool add_model(bool imperial_units = false, std::string fname = "");
     void import_zip_archive();

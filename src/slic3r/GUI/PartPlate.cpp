@@ -6653,6 +6653,33 @@ int PartPlateList::duplicate_plate(int index)
 }
 
 
+void PartPlateList::move_instances_to_plates(Model& src_model, int src_plate_count, int first_plate)
+{
+    // A saved project keeps its instances where they sat in its own plate grid, whose column
+    // count depends on how many plates it had, so each instance is mapped through its source plate.
+    src_plate_count = std::max(src_plate_count, 1);
+    const int src_cols = compute_colum_count(src_plate_count);
+    const Vec2d shape_center = m_shape.empty() ? Vec2d(m_plate_width / 2., m_plate_depth / 2.) : BoundingBoxf(m_shape).center();
+
+    for (ModelObject* object : src_model.objects) {
+        for (size_t i = 0; i < object->instances.size(); ++i) {
+            const Vec3d center = object->instance_bounding_box(i).center();
+            int    src_index = 0;
+            double best      = std::numeric_limits<double>::max();
+            for (int plate = 0; plate < src_plate_count; ++plate) {
+                const double dist = (compute_shape_position(plate, src_cols) + shape_center - Vec2d(center.x(), center.y())).squaredNorm();
+                if (dist < best) {
+                    best      = dist;
+                    src_index = plate;
+                }
+            }
+            const Vec2d delta = compute_shape_position(first_plate + src_index, m_plate_cols) - compute_shape_position(src_index, src_cols);
+            ModelInstance* instance = object->instances[i];
+            instance->set_offset(instance->get_offset() + Vec3d(delta.x(), delta.y(), 0.));
+        }
+    }
+}
+
 //destroy print's objects and results
 int PartPlateList::destroy_print(int print_index)
 {

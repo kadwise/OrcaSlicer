@@ -19458,6 +19458,97 @@ int Plater::get_3mf_file_count(std::vector<fs::path> paths)
     return count;
 }
 
+void Plater::add_projects_as_plates()
+{
+    wxFileDialog dialog(this, _L("Choose one or more projects to add as new plates"), from_u8(wxGetApp().app_config->get_last_dir()), "",
+                        file_wildcards(FT_3MF), wxFD_OPEN | wxFD_MULTIPLE | wxFD_FILE_MUST_EXIST);
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+    wxArrayString input_files;
+    dialog.GetPaths(input_files);
+    if (input_files.empty())
+        return;
+
+    Plater::TakeSnapshot snapshot(this, "Add projects as plates");
+    PartPlateList& plate_list     = p->partplate_list;
+    const size_t   filament_count = wxGetApp().preset_bundle->filament_presets.size();
+    wxString       errors;
+    bool           filaments_clamped = false;
+
+    for (const wxString& file : input_files) {
+        const fs::path path = into_path(file);
+        DynamicPrintConfig        config;
+        ConfigSubstitutionContext substitutions(ForwardCompatibilitySubstitutionRule::Enable);
+        PlateDataPtrs             plate_data;
+        std::vector<Preset*>      project_presets;
+        ScopeGuard release([&plate_data, &project_presets]() {
+            release_PlateData_list(plate_data);
+            for (Preset* preset : project_presets)
+                delete preset;
+        });
+
+        Model src_model;
+        try {
+            src_model = Model::read_from_file(path.string(), &config, &substitutions, LoadStrategy::LoadModel, &plate_data, &project_presets);
+        } catch (const std::exception& ex) {
+            errors += from_path(path.filename()) + ": " + from_u8(ex.what()) + "\n";
+            continue;
+        }
+        if (src_model.objects.empty())
+            continue;
+
+        const int src_plate_count = std::max<int>(plate_data.size(), 1);
+        // An empty project takes the first added plate on its own (empty) first plate.
+        const int first_plate = (model().objects.empty() && plate_list.get_plate_count() == 1) ? 0 : plate_list.get_plate_count();
+        if (first_plate + src_plate_count > (int) PartPlateList::MAX_PLATES_COUNT) {
+            errors += format_wxstr(_L("%1%: there is no room for its plates, a project can have at most %2% plates."),
+                                   from_path(path.filename()), PartPlateList::MAX_PLATES_COUNT) + "\n";
+            continue;
+        }
+        while (plate_list.get_plate_count() < first_plate + src_plate_count)
+            plate_list.create_plate(true);
+
+        plate_list.move_instances_to_plates(src_model, src_plate_count, first_plate);
+        for (ModelObject* object : src_model.objects) {
+            if (object->input_file.empty())
+                object->input_file = path.string();
+            for (ModelVolume* volume : object->volumes) {
+                const std::vector<int> used = volume->get_extruders();
+                if (volume->extruder_id() > (int) filament_count ||
+                    std::any_of(used.begin(), used.end(), [filament_count](int id) { return id > (int) filament_count; }))
+                    filaments_clamped = true;
+                volume->update_extruder_count(filament_count);
+            }
+            if (const ConfigOption* opt = object->config.option("extruder"); opt != nullptr && opt->getInt() > (int) filament_count) {
+                object->config.erase("extruder");
+                filaments_clamped = true;
+            }
+        }
+        p->load_model_objects(src_model.objects, true);
+
+        // Bring over each plate's name, lock and plate settings (bed type, print sequence, ...).
+        for (int i = 0; i < (int) plate_data.size(); ++i) {
+            PartPlate* plate = plate_list.get_plate(first_plate + i);
+            if (plate == nullptr || plate_data[i] == nullptr)
+                continue;
+            plate->config()->apply(plate_data[i]->config);
+            plate->set_plate_name(plate_data[i]->plate_name);
+            plate->lock(plate_data[i]->locked);
+        }
+        plate_list.reload_all_objects();
+    }
+
+    p->sidebar->obj_list()->reload_all_plates();
+    update();
+    p->camera.requires_zoom_to_plate = REQUIRES_ZOOM_TO_ALL_PLATE;
+
+    if (filaments_clamped)
+        show_info(this, _L("Some added objects used filament slots that this project does not have. They now print with the default filament. Add filaments and reassign them if needed."),
+                  _L("Add projects as plates"));
+    if (!errors.empty())
+        show_error(this, _L("Some projects could not be added:") + "\n" + errors);
+}
+
 void Plater::add_file()
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << __LINE__ << " entry";
