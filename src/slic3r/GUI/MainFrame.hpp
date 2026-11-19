@@ -558,6 +558,9 @@ private:
     Plater*                 m_first_plater{ nullptr };
     wxTimer                 m_project_tab_timer;
     void                    activate_plater(Plater* plater);
+    // Saves the shown tab's backup now: a tab cannot change while another is shown, so the
+    // backup taken when leaving it stays current.
+    void                    backup_project_tab();
 public:
     // The top bar's Undo/Redo, for a tab that keeps its own history (Design).
     void set_undo_redo_enabled(bool undo, bool redo);

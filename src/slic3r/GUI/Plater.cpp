@@ -7899,6 +7899,8 @@ bool PlaterDropTarget::OnDropFiles(wxCoord x, wxCoord y, const wxArrayString &fi
     return res;
 }
 
+static void set_shared_mouse3d_controller(Mouse3DController* controller);
+
 Plater::priv::priv(Plater *q, MainFrame *main_frame)
     : q(q)
     , main_frame(main_frame)
@@ -8317,18 +8319,21 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     mouse3d_controller.load_config(*wxGetApp().app_config);
     // Start the background thread to detect and connect to a HID device (Windows and Linux).
     // Connect to a 3DConnextion driver (OSX).
-    // Print farm: only the first project tab drives the device; extra tabs would fight over it.
-    if (is_first_tab)
+    // Print farm: only the first project tab drives the device; extra tabs would fight over it,
+    // and get_mouse3d_controller() hands every tab this one.
+    if (is_first_tab) {
         mouse3d_controller.init();
+        set_shared_mouse3d_controller(&mouse3d_controller);
+    }
 #ifdef _WIN32
     // Register an USB HID (Human Interface Device) attach event. evt contains Win32 path to the USB device containing VID, PID and other info.
     // This event wakes up the Mouse3DController's background thread to enumerate HID devices, if the VID of the callback event
     // is one of the 3D Mouse vendors (3DConnexion or Logitech).
     this->q->Bind(EVT_HID_DEVICE_ATTACHED, [this](HIDDeviceAttachedEvent &evt) {
-        mouse3d_controller.device_attached(evt.data);
+        q->get_mouse3d_controller().device_attached(evt.data);
         });
     this->q->Bind(EVT_HID_DEVICE_DETACHED, [this](HIDDeviceAttachedEvent& evt) {
-        mouse3d_controller.device_detached(evt.data);
+        q->get_mouse3d_controller().device_detached(evt.data);
         });
 #endif /* _WIN32 */
     //notification_manager = new NotificationManager(this->q);
@@ -8388,24 +8393,51 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     // BBS: restore project
     if (wxGetApp().is_editor()) {
         auto last_backup = wxGetApp().app_config->get_last_backup_dir();
-        this->q->Bind(EVT_RESTORE_PROJECT, [this, last = last_backup](wxCommandEvent& e) {
-            std::string last_backup = last;
-            std::string originfile;
-            if (Slic3r::has_restore_data(last_backup, originfile)) {
-                auto result = MessageDialog(this->q, _L("Previously unsaved items have been detected. Do you want to restore them\?"), wxString(SLIC3R_APP_FULL_NAME) + " - " + _L("Restore"), wxYES_NO | wxYES_DEFAULT | wxCENTRE).ShowModal();
+        // Print farm: the backups of the other project tabs, read before this session replaces them.
+        auto tab_backups = wxGetApp().app_config->get("app", "farm_backup_paths");
+        this->q->Bind(EVT_RESTORE_PROJECT, [this, last = last_backup, tab_backups](wxCommandEvent& e) {
+            std::vector<std::string> dirs{ last };
+            std::vector<std::string> more;
+            boost::split(more, tab_backups, boost::is_any_of("|"), boost::token_compress_on);
+            for (const std::string& dir : more)
+                if (!dir.empty() && std::find(dirs.begin(), dirs.end(), dir) == dirs.end())
+                    dirs.push_back(dir);
+
+            struct Backup { std::string dir, file, origin; };
+            std::vector<Backup> found;
+            auto remove_dir = [](const std::string& dir) {
+                try {
+                    if (!dir.empty())
+                        boost::filesystem::remove_all(dir);
+                } catch (...) {}
+            };
+            for (const std::string& dir : dirs) {
+                std::string file = dir, origin;
+                if (Slic3r::has_restore_data(file, origin))
+                    found.push_back({ dir, file, origin });
+                else if (origin != "<lock>") // see bbs_3mf.cpp for lock detail
+                    remove_dir(dir);
+            }
+
+            if (!found.empty()) {
+                const wxString question = found.size() == 1 ?
+                    _L("Previously unsaved items have been detected. Do you want to restore them\?") :
+                    format_wxstr(_L_PLURAL("Unsaved items from %1% project have been detected. Do you want to restore them\?",
+                                           "Unsaved items from %1% projects have been detected. Do you want to restore them\?", found.size()),
+                                 found.size());
+                auto result = MessageDialog(this->q, question, wxString(SLIC3R_APP_FULL_NAME) + " - " + _L("Restore"), wxYES_NO | wxYES_DEFAULT | wxCENTRE).ShowModal();
                 if (result == wxID_YES) {
-                    this->q->load_project(from_path(last_backup), from_path(originfile));
+                    this->q->load_project(from_path(found.front().file), from_path(found.front().origin));
+                    // Each further project in a tab of its own.
+                    for (size_t i = 1; i < found.size(); ++i)
+                        if (Plater* tab = wxGetApp().mainframe->new_project_tab(); tab != nullptr && tab != this->q)
+                            tab->load_project(from_path(found[i].file), from_path(found[i].origin));
                     Slic3r::backup_soon();
                     return;
                 }
+                for (const Backup& backup : found)
+                    remove_dir(backup.dir);
             }
-
-            try {
-                if (originfile != "<lock>") // see bbs_3mf.cpp for lock detail
-                    boost::filesystem::remove_all(last);
-            }
-
-            catch (...) {}
             
             if (this->q->get_project_filename().IsEmpty() && this->q->is_empty_project()) {
                 int skip_confirm = e.GetInt();
@@ -24576,14 +24608,19 @@ void Plater::reset_gcode_toolpaths()
     p->reset_gcode_toolpaths();
 }
 
+// Print farm: one controller, the first project tab's, drives the device. It works on
+// wxGetApp().plater(), so it moves the camera of whichever tab is shown.
+static Mouse3DController* s_shared_mouse3d_controller = nullptr;
+static void set_shared_mouse3d_controller(Mouse3DController* controller) { s_shared_mouse3d_controller = controller; }
+
 const Mouse3DController& Plater::get_mouse3d_controller() const
 {
-    return p->mouse3d_controller;
+    return s_shared_mouse3d_controller != nullptr ? *s_shared_mouse3d_controller : p->mouse3d_controller;
 }
 
 Mouse3DController& Plater::get_mouse3d_controller()
 {
-    return p->mouse3d_controller;
+    return s_shared_mouse3d_controller != nullptr ? *s_shared_mouse3d_controller : p->mouse3d_controller;
 }
 
 NotificationManager * Plater::get_notification_manager()

@@ -5037,6 +5037,7 @@ void MainFrame::select_project_tab(size_t index)
     }
     wxBusyCursor busy;
     Plater* old = m_plater;
+    backup_project_tab();
     m_plater->on_project_tab_deactivated();
     m_project_tabs[m_active_project_tab].presets = wxGetApp().preset_bundle->document_state();
 
@@ -5065,6 +5066,7 @@ Plater* MainFrame::new_project_tab()
     }
     wxBusyCursor busy;
     Plater* old = m_plater;
+    backup_project_tab();
     m_plater->on_project_tab_deactivated();
     PresetBundle::DocumentState presets = wxGetApp().preset_bundle->document_state();
     m_project_tabs[m_active_project_tab].presets = presets;
@@ -5149,10 +5151,33 @@ bool MainFrame::close_project_tab(size_t index)
     return true;
 }
 
+void MainFrame::backup_project_tab()
+{
+    if (m_plater == nullptr || wxGetApp().app_config->get("backup_switch") != "true")
+        return;
+    if (!m_plater->up_to_date(false, true)) {
+        m_plater->export_3mf(m_plater->model().get_backup_path() + "/.3mf", SaveStrategy::Backup);
+        m_plater->up_to_date(true, true);
+    }
+}
+
 void MainFrame::refresh_project_tab_bar()
 {
     if (m_project_tab_bar == nullptr)
         return;
+
+    // Where every open tab keeps its backup, so a restart after a crash can offer them all.
+    std::string backups;
+    for (const ProjectTab& tab : m_project_tabs) {
+        if (tab.plater->model().objects.empty())
+            continue;
+        if (!backups.empty())
+            backups += "|";
+        backups += tab.plater->model().get_backup_path();
+    }
+    if (wxGetApp().app_config->get("app", "farm_backup_paths") != backups)
+        wxGetApp().app_config->set("app", "farm_backup_paths", backups);
+
     std::vector<wxString> labels;
     labels.reserve(m_project_tabs.size());
     for (const ProjectTab& tab : m_project_tabs) {
