@@ -198,6 +198,8 @@ public:
     // Print farm: the process settings panel is one window shared by every project tab's sidebar;
     // this moves it into this sidebar's slots.
     void attach_params_panel();
+    // Lays the Process pane out again and shows its hint while the params panel is hidden.
+    void update_params_hint() const;
     //void update_partplate(PartPlateList& list);
     void update_presets(Slic3r::Preset::Type preset_type);
     //BBS

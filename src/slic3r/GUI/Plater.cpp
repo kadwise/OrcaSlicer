@@ -942,6 +942,8 @@ struct Sidebar::priv
     // Print farm: the Objects and Process panes.
     wxPanel    *objects_page{ nullptr };
     wxPanel    *process_page{ nullptr };
+    // Shown in the Process pane while the params panel hides itself (Objects mode, nothing selected).
+    wxStaticText *params_hint{ nullptr };
 
     //wxComboBox *                m_comboBox_print_preset;
     wxStaticLine *              m_staticline1;
@@ -3665,8 +3667,18 @@ Sidebar::Sidebar(Plater *parent)
     if (params_panel) {
         p->params_body_slot = new wxBoxSizer(wxVERTICAL);
         process_sizer->Add(p->params_body_slot, 1, wxEXPAND);
+        p->params_hint = new wxStaticText(p->process_page, wxID_ANY,
+                                          _L("Select an object, part or plate in the Objects panel to edit its settings, or switch to Global."));
+        p->params_hint->SetForegroundColour(wxColour("#6B6B6B"));
+        p->params_hint->Wrap(FromDIP(260));
+        p->params_hint->Hide();
+        process_sizer->Add(p->params_hint, 0, wxALL, FromDIP(12));
         attach_params_panel();
     }
+    // The panes may be docked short: their contents scroll instead of pushing the window past the
+    // bottom of the screen.
+    p->objects_page->SetMinSize(wxSize(-1, FromDIP(60)));
+    p->process_page->SetMinSize(wxSize(-1, FromDIP(60)));
 #endif
     }
 
@@ -3849,7 +3861,7 @@ void Sidebar::attach_params_panel()
     };
     move_into(params_panel->get_top_panel(), p->params_top_slot);
     move_into(params_panel, p->params_body_slot);
-    p->process_page->Layout();
+    update_params_hint();
 }
 
 void Sidebar::update_all_preset_comboboxes(bool update_filament_combos)
@@ -6747,6 +6759,18 @@ ObjectLayers* Sidebar::obj_layers()
     return p->object_layers;
 }
 
+void Sidebar::update_params_hint() const
+{
+    MainFrame*   main_frame   = dynamic_cast<MainFrame*>(wxGetTopLevelParent(const_cast<Sidebar*>(this)));
+    ParamsPanel* params_panel = main_frame != nullptr ? main_frame->m_param_panel : nullptr;
+    if (p->params_hint == nullptr || params_panel == nullptr)
+        return;
+    // The params panel shows and hides itself (ParamsPanel::set_active_tab): lay the pane out again.
+    const bool here = params_panel->GetParent() == p->process_page;
+    p->params_hint->Show(here && !params_panel->IsShown());
+    p->process_page->Layout();
+}
+
 wxPanel* Sidebar::objects_page() const { return p->objects_page; }
 wxPanel* Sidebar::process_page() const { return p->process_page; }
 
@@ -6982,6 +7006,7 @@ bool Sidebar::show_object_list(bool show) const
         p->m_object_list->part_selection_changed();
     p->objects_page->Layout();
     p->scrolled->Layout();
+    update_params_hint();
     return true;
 }
 
@@ -7485,6 +7510,10 @@ struct Plater::priv
     void enable_sidebar(bool enabled);
     void collapse_sidebar(bool collapse);
     void update_sidebar(bool force_update = false);
+    // Print farm: the window layout (where the sidebar and the panes sit) is one for every project
+    // tab: saved to the config when a tab is left, applied when one is shown.
+    void save_window_layout();
+    void apply_saved_window_layout();
     // Print farm: the panes split out of the sidebar.
     struct SidebarSectionPane
     {
@@ -8157,7 +8186,11 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
             m_aui_mgr.track_docked_size(section.window);
 
         // Hide sidebar initially, will re-show it after initialization when we got proper window size
+        // (the Objects and Process panes too, or a small first window squeezes their saved sizes).
         sidebar.Hide();
+        for (const SidebarSectionPane& section : sidebar_section_panes())
+            if (wxAuiPaneInfo& pane = m_aui_mgr.GetPane(section.window); pane.IsOk())
+                pane.Hide();
         m_aui_mgr.Update();
     }
 
@@ -11355,21 +11388,44 @@ void Plater::priv::reset(bool apply_presets_change, bool reload_presets)
     m_saved_timestamp = m_backup_timestamp = size_t(-1);
 
     // Save window layout
-    if (sidebar_layout.is_enabled) {
-        // Reset show state
-        auto& sidebar = m_aui_mgr.GetPane(this->sidebar);
-        if (!sidebar_layout.is_collapsed && !sidebar.IsShown()) {
-            sidebar.Show();
-        }
-        auto layout = m_aui_mgr.SavePerspective();
-        // The UV editor pane is only built when first used; keep its saved place from an earlier session.
-        if (!uv_editor.built()) {
-            const std::string kept = aui_pane_layout_entry(wxGetApp().app_config->get("window_layout"), "uv_editor");
-            if (!kept.empty())
-                layout += wxString::FromUTF8(kept) + "|";
-        }
-        wxGetApp().app_config->set("window_layout", layout.utf8_string());
+    save_window_layout();
+}
+
+void Plater::priv::save_window_layout()
+{
+    if (!sidebar_layout.is_enabled)
+        return;
+    // Reset show state
+    auto& sidebar = m_aui_mgr.GetPane(this->sidebar);
+    if (!sidebar_layout.is_collapsed && !sidebar.IsShown()) {
+        sidebar.Show();
     }
+    // Print farm: so do the panes that follow the sidebar.
+    if (!sidebar_layout.is_collapsed)
+        for (const SidebarSectionPane& section : sidebar_section_panes())
+            if (wxAuiPaneInfo& pane = m_aui_mgr.GetPane(section.window); pane.IsOk() && !pane.IsShown())
+                pane.Show();
+    auto layout = m_aui_mgr.SavePerspective();
+    // The UV editor pane is only built when first used; keep its saved place from an earlier session.
+    if (!uv_editor.built()) {
+        const std::string kept = aui_pane_layout_entry(wxGetApp().app_config->get("window_layout"), "uv_editor");
+        if (!kept.empty())
+            layout += wxString::FromUTF8(kept) + "|";
+    }
+    wxGetApp().app_config->set("window_layout", layout.utf8_string());
+}
+
+void Plater::priv::apply_saved_window_layout()
+{
+    const std::string layout = wxGetApp().app_config->get("window_layout");
+    if (layout.empty() || !sidebar_layout.is_enabled || !m_aui_mgr.LoadPerspective(wxString::FromUTF8(layout), false))
+        return;
+    // Loading a layout hides the panes it does not list: put the dock panes back as they were.
+    for (const auto& [window, dock_pane] : m_dock_panes)
+        if (wxAuiPaneInfo& pane = m_aui_mgr.GetPane(window); pane.IsOk())
+            pane.Show(dock_pane_visible(dock_pane, pane));
+    sidebar_layout.is_collapsed = !m_aui_mgr.GetPane(this->sidebar).IsShown();
+    update_sidebar(true);
 }
 
 void Plater::priv::center_selection()
@@ -19611,6 +19667,7 @@ int Plater::get_3mf_file_count(std::vector<fs::path> paths)
 
 void Plater::on_project_tab_deactivated()
 {
+    p->save_window_layout();
     p->background_process_timer.Stop();
     p->auto_reslice_timer.Stop();
     if (p->background_process.running())
@@ -19633,6 +19690,7 @@ void Plater::on_project_tab_activated(bool preview)
     p->sidebar_layout.show       = true;
     // The process settings panel is shared: bring it into this tab's sidebar.
     sidebar().attach_params_panel();
+    p->apply_saved_window_layout();
     p->update_sidebar(true);
     p->select_view_3D(preview ? "Preview" : "3D");
     sidebar().update_all_preset_comboboxes();
